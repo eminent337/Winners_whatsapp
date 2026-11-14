@@ -5,8 +5,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,19 +34,24 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +66,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -121,6 +129,9 @@ fun GradePulseMainScreen(
     var searchVisible by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var selectedFileIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedStudentIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showParentOptionsMenu by remember { mutableStateOf(false) }
+    var showDeleteParentsConfirmDialog by remember { mutableStateOf(false) }
     var previewFileId by rememberSaveable { mutableStateOf<String?>(null) }
     var activeChatTarget by remember { mutableStateOf<ActiveChatTarget?>(null) }
     var fileForRecipientAssign by remember { mutableStateOf<UploadedReportFile?>(null) }
@@ -150,6 +161,10 @@ fun GradePulseMainScreen(
     val validSelectedIds = remember(uploadedFiles, selectedFileIds) {
         val allIds = uploadedFiles.map { it.id }.toSet()
         selectedFileIds.intersect(allIds)
+    }
+    val validSelectedStudentIds = remember(studentsList, selectedStudentIds) {
+        val allStudentIds = studentsList.map { it.id }.toSet()
+        selectedStudentIds.intersect(allStudentIds)
     }
 
     // Full-screen uploaded PDF/Image preview takes priority (can be opened from Folder OR from a Chat bubble!)
@@ -231,16 +246,23 @@ fun GradePulseMainScreen(
     if (selectedTab == 1 && validSelectedIds.isNotEmpty()) {
         BackHandler { selectedFileIds = emptySet() }
     }
+    if (selectedTab == 2 && validSelectedStudentIds.isNotEmpty()) {
+        BackHandler {
+            selectedStudentIds = emptySet()
+            showParentOptionsMenu = false
+        }
+    }
 
     val dividerColor = if (isSystemInDarkTheme()) Color(0xFF222E35) else WhatsAppDivider
-    val isSelectionMode = selectedTab == 1 && validSelectedIds.isNotEmpty()
+    val isFolderSelectionMode = selectedTab == 1 && validSelectedIds.isNotEmpty()
+    val isParentSelectionMode = selectedTab == 2 && validSelectedStudentIds.isNotEmpty()
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column {
-                if (isSelectionMode) {
+                if (isFolderSelectionMode) {
                     TopAppBar(
                         navigationIcon = {
                             IconButton(onClick = { selectedFileIds = emptySet() }) {
@@ -281,7 +303,7 @@ fun GradePulseMainScreen(
                                     val chosen = uploadedFiles.filter { it.id in validSelectedIds }
                                     if (chosen.size == 1) {
                                         val single = chosen.first()
-                                        WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                                        val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                                             context = context,
                                             file = single,
                                             schoolName = schoolSettings.schoolName,
@@ -289,7 +311,9 @@ fun GradePulseMainScreen(
                                             principalSignature = schoolSettings.principalSignature,
                                             customIntroNote = schoolSettings.customWhatsAppGreeting
                                         )
-                                        viewModel.markUploadedFilesDispatched(listOf(single.id))
+                                        if (launched) {
+                                            viewModel.markUploadedFilesDispatched(listOf(single.id))
+                                        }
                                         selectedFileIds = emptySet()
                                     } else if (chosen.size > 1) {
                                         showBatchSelectedSendDialog = true
@@ -315,6 +339,90 @@ fun GradePulseMainScreen(
                                     contentDescription = "Delete Selected",
                                     tint = Color.White
                                 )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = WhatsAppTealDark
+                        )
+                    )
+                } else if (isParentSelectionMode) {
+                    TopAppBar(
+                        navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    selectedStudentIds = emptySet()
+                                    showParentOptionsMenu = false
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Clear parent selection",
+                                    tint = Color.White
+                                )
+                            }
+                        },
+                        title = {
+                            Text(
+                                text = "${validSelectedStudentIds.size} selected",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = {
+                                    selectedStudentIds = if (validSelectedStudentIds.size == studentsList.size) {
+                                        emptySet()
+                                    } else {
+                                        studentsList.map { it.id }.toSet()
+                                    }
+                                },
+                                modifier = Modifier.testTag("select_all_parents_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SelectAll,
+                                    contentDescription = "Select All Parents",
+                                    tint = Color.White
+                                )
+                            }
+                            Box {
+                                IconButton(
+                                    onClick = { showParentOptionsMenu = true },
+                                    modifier = Modifier.testTag("parent_selection_options_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More options",
+                                        tint = Color.White
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showParentOptionsMenu,
+                                    onDismissRequest = { showParentOptionsMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Delete",
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        onClick = {
+                                            showParentOptionsMenu = false
+                                            showDeleteParentsConfirmDialog = true
+                                        },
+                                        modifier = Modifier.testTag("parent_options_delete_item")
+                                    )
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -583,8 +691,16 @@ fun GradePulseMainScreen(
                 )
                 2 -> NeatStudentsDirectoryTab(
                     studentsState = studentsState,
+                    selectedStudentIds = validSelectedStudentIds,
                     searchQuery = searchQuery,
                     onAddStudent = { showCreateStudentDialog = true },
+                    onToggleSelectStudent = { stuId ->
+                        selectedStudentIds = if (stuId in selectedStudentIds) {
+                            selectedStudentIds - stuId
+                        } else {
+                            selectedStudentIds + stuId
+                        }
+                    },
                     onOpenChatForStudent = { stu ->
                         activeChatTarget = ActiveChatTarget(
                             threadKey = normalizeThreadKey(stu.parentWhatsApp, stu.id),
@@ -593,8 +709,7 @@ fun GradePulseMainScreen(
                             parentName = stu.parentName,
                             parentWhatsApp = stu.parentWhatsApp
                         )
-                    },
-                    onDeleteStudent = { viewModel.deleteStudent(it) }
+                    }
                 )
                 3 -> NeatSchoolSettingsTab(
                     settings = schoolSettings,
@@ -667,15 +782,61 @@ fun GradePulseMainScreen(
             }
         )
     }
+
+    if (showDeleteParentsConfirmDialog && validSelectedStudentIds.isNotEmpty()) {
+        val count = validSelectedStudentIds.size
+        AlertDialog(
+            onDismissRequest = { showDeleteParentsConfirmDialog = false },
+            title = {
+                Text(
+                    text = if (count == 1) "Delete parent contact?" else "Delete $count parent contacts?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = if (count == 1) {
+                        "Are you sure you want to remove this student and parent contact from ${schoolSettings.schoolName}?"
+                    } else {
+                        "Are you sure you want to remove these $count student and parent contacts from ${schoolSettings.schoolName}?"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val toDelete = validSelectedStudentIds.toList()
+                        showDeleteParentsConfirmDialog = false
+                        selectedStudentIds = emptySet()
+                        viewModel.deleteStudents(toDelete)
+                    },
+                    modifier = Modifier.testTag("confirm_delete_parents_button")
+                ) {
+                    Text(
+                        text = "Delete",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteParentsConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NeatStudentsDirectoryTab(
     studentsState: UiState<List<Student>>,
+    selectedStudentIds: Set<String>,
     searchQuery: String,
     onAddStudent: () -> Unit,
-    onOpenChatForStudent: (Student) -> Unit,
-    onDeleteStudent: (String) -> Unit
+    onToggleSelectStudent: (String) -> Unit,
+    onOpenChatForStudent: (Student) -> Unit
 ) {
     val allStudents = (studentsState as? UiState.Success)?.data ?: emptyList()
     val filteredStudents = remember(allStudents, searchQuery) {
@@ -688,6 +849,7 @@ private fun NeatStudentsDirectoryTab(
         }
     }
     val dividerColor = if (isSystemInDarkTheme()) Color(0xFF222E35) else WhatsAppDivider
+    val isSelectionMode = selectedStudentIds.isNotEmpty()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -702,7 +864,11 @@ private fun NeatStudentsDirectoryTab(
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Text(
-                    text = "Tap any parent to open their WhatsApp chat history, or upload report cards in Folder to auto-match student names.",
+                    text = if (isSelectionMode) {
+                        "${selectedStudentIds.size} selected • Tap ⋮ options at top and choose Delete"
+                    } else {
+                        "Tap a parent to open WhatsApp chat. Hold any contact (or tap their avatar) to select."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)
@@ -738,6 +904,12 @@ private fun NeatStudentsDirectoryTab(
             }
         } else {
             items(filteredStudents, key = { it.id }) { student ->
+                val isSelected = student.id in selectedStudentIds
+                val rowBg = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                } else {
+                    Color.Transparent
+                }
                 val initials = remember(student.fullName) {
                     student.fullName.split(" ")
                         .filter { it.isNotBlank() }
@@ -745,11 +917,25 @@ private fun NeatStudentsDirectoryTab(
                         .joinToString("") { it.take(1).uppercase() }
                         .ifBlank { "S" }
                 }
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(rowBg)
+                        .combinedClickable(
+                            onClick = {
+                                if (isSelectionMode) {
+                                    onToggleSelectStudent(student.id)
+                                } else {
+                                    onOpenChatForStudent(student)
+                                }
+                            },
+                            onLongClick = { onToggleSelectStudent(student.id) }
+                        )
+                        .testTag("parent_contact_row_${student.id}")
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onOpenChatForStudent(student) }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -757,15 +943,27 @@ private fun NeatStudentsDirectoryTab(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .background(
+                                    if (isSelected) WhatsAppGreenAccent else MaterialTheme.colorScheme.primaryContainer
+                                )
+                                .clickable { onToggleSelectStudent(student.id) },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = initials,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold
-                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = initials,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -789,19 +987,14 @@ private fun NeatStudentsDirectoryTab(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        IconButton(onClick = { onOpenChatForStudent(student) }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Chat,
-                                contentDescription = "Open Parent Chat",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(onClick = { onDeleteStudent(student.id) }) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = "Delete Student",
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                        if (!isSelectionMode) {
+                            IconButton(onClick = { onOpenChatForStudent(student) }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Chat,
+                                    contentDescription = "Open Parent Chat",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(

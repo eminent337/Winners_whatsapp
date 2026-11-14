@@ -19,6 +19,8 @@ import com.example.data.model.buildUploadedFileWhatsAppCaption
 import com.example.data.model.normalizeThreadKey
 import com.example.data.repository.GradePulseRepository
 import com.example.data.repository.UploadedFolderRepository
+import com.example.service.WhatsAppDispatchResult
+import com.example.service.WhatsAppDispatchService
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
@@ -177,6 +179,21 @@ class GradePulseViewModel(
             repository.seedSampleSchoolData()
             repository.migrateDefaultSchoolNameIfNeeded()
         }
+        viewModelScope.launch {
+            WhatsAppDispatchService.dispatchEvents.collect { event ->
+                when (val result = event?.result) {
+                    is WhatsAppDispatchResult.Failed -> {
+                        showBannerMessage("WhatsApp dispatch error: ${result.reason}")
+                        WhatsAppDispatchService.clearLastDispatchEvent()
+                    }
+                    is WhatsAppDispatchResult.DispatchedViaFallback -> {
+                        showBannerMessage("Opened ${result.channelLabel} for ${result.recipientLabel}.")
+                        WhatsAppDispatchService.clearLastDispatchEvent()
+                    }
+                    is WhatsAppDispatchResult.DispatchedToWhatsApp, null -> Unit
+                }
+            }
+        }
     }
 
     fun updateSchoolConfig(
@@ -266,6 +283,21 @@ class GradePulseViewModel(
         viewModelScope.launch {
             repository.deleteStudent(studentId)
             showBannerMessage("Student removed from roster.")
+        }
+    }
+
+    fun deleteStudents(studentIds: List<String>) {
+        if (studentIds.isEmpty()) return
+        viewModelScope.launch {
+            studentIds.forEach { id ->
+                repository.deleteStudent(id)
+            }
+            val label = if (studentIds.size == 1) {
+                "1 parent contact deleted."
+            } else {
+                "${studentIds.size} parent contacts deleted."
+            }
+            showBannerMessage(label)
         }
     }
 

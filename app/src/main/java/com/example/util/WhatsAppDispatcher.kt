@@ -3,7 +3,6 @@ package com.example.util
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -12,46 +11,36 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
-import androidx.core.content.FileProvider
 import com.example.data.model.ReportCard
 import com.example.data.model.UploadedReportFile
 import com.example.data.model.buildUploadedFileWhatsAppCaption
 import com.example.data.model.buildWhatsAppReportMessage
+import com.example.service.WhatsAppDispatchService
+import com.example.service.WhatsAppSecurityValidator
 import java.io.File
 import java.io.FileOutputStream
 
 object WhatsAppDispatcher {
 
     /**
-     * Normalizes a phone number into digits only for WhatsApp wa.me / api.whatsapp.com URLs.
+     * Normalizes a phone number into E.164 digits for WhatsApp JID & deep links.
      */
     fun normalizeWhatsAppDigits(rawPhone: String): String {
-        return rawPhone.filter { it.isDigit() }
+        return WhatsAppSecurityValidator.normalizeE164Digits(rawPhone)
+            ?: rawPhone.filter { it.isDigit() }
     }
 
     /**
      * Checks if WhatsApp or WhatsApp Business is installed on the device.
      */
     fun resolveInstalledWhatsAppPackage(context: Context): String? {
-        val pm = context.packageManager
-        val candidates = listOf("com.whatsapp", "com.whatsapp.w4b")
-        for (pkg in candidates) {
-            try {
-                pm.getPackageInfo(pkg, 0)
-                return pkg
-            } catch (_: Exception) {
-                // Not installed
-            }
-        }
-        return null
+        return WhatsAppSecurityValidator.resolveInstalledWhatsAppPackage(context)
     }
 
     /**
-     * Opens WhatsApp directly to the parent's phone number with the pre-filled report card message.
-     * Falls back gracefully to the universal https://wa.me link or system share sheet if WhatsApp
-     * is not installed on the device/emulator.
+     * Passes structured student report card data through [WhatsAppDispatchService] to open
+     * the parent's WhatsApp chat pre-filled with the formatted report card.
      */
     fun launchWhatsAppDirectText(
         context: Context,
@@ -59,61 +48,17 @@ object WhatsAppDispatcher {
         customIntroNote: String = ""
     ): Boolean {
         val message = buildWhatsAppReportMessage(report, customIntroNote)
-        val cleanDigits = normalizeWhatsAppDigits(report.parentWhatsApp)
-        val encodedText = Uri.encode(message)
-        val waUri = if (cleanDigits.isNotEmpty()) {
-            Uri.parse("https://api.whatsapp.com/send?phone=$cleanDigits&text=$encodedText")
-        } else {
-            Uri.parse("https://api.whatsapp.com/send?text=$encodedText")
-        }
-
-        val installedPkg = resolveInstalledWhatsAppPackage(context)
-        if (installedPkg != null) {
-            try {
-                val directIntent = Intent(Intent.ACTION_VIEW, waUri).apply {
-                    setPackage(installedPkg)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(directIntent)
-                return true
-            } catch (_: Exception) {
-                // Fall through
-            }
-        }
-
-        // Try launching the https://wa.me deep link in browser / handler
-        try {
-            val webUri = if (cleanDigits.isNotEmpty()) {
-                Uri.parse("https://wa.me/$cleanDigits?text=$encodedText")
-            } else {
-                waUri
-            }
-            val viewIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(viewIntent)
-            return true
-        } catch (_: Exception) {
-            // Final fallback: system share sheet so it works on any device/emulator
-            return try {
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, "Report Card: ${report.studentName}")
-                    putExtra(Intent.EXTRA_TEXT, message)
-                }
-                val chooser = Intent.createChooser(shareIntent, "Send Report Card to ${report.parentName}").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
+        return WhatsAppDispatchService.startTextChatDispatch(
+            context = context,
+            parentWhatsApp = report.parentWhatsApp,
+            parentName = report.parentName,
+            messageText = message,
+            subjectLabel = "Report Card: ${report.studentName}"
+        )
     }
 
     /**
-     * Opens WhatsApp directly to the parent's phone number with an arbitrary chat message.
+     * Passes a direct parent message through [WhatsAppDispatchService] pre-filled in the parent's chat.
      */
     fun launchWhatsAppDirectPlainText(
         context: Context,
@@ -121,58 +66,18 @@ object WhatsAppDispatcher {
         parentName: String,
         message: String
     ): Boolean {
-        val cleanDigits = normalizeWhatsAppDigits(parentWhatsApp)
-        val encodedText = Uri.encode(message)
-        val waUri = if (cleanDigits.isNotEmpty()) {
-            Uri.parse("https://api.whatsapp.com/send?phone=$cleanDigits&text=$encodedText")
-        } else {
-            Uri.parse("https://api.whatsapp.com/send?text=$encodedText")
-        }
-
-        val installedPkg = resolveInstalledWhatsAppPackage(context)
-        if (installedPkg != null) {
-            try {
-                val directIntent = Intent(Intent.ACTION_VIEW, waUri).apply {
-                    setPackage(installedPkg)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(directIntent)
-                return true
-            } catch (_: Exception) {
-                // Fall through
-            }
-        }
-
-        return try {
-            val webUri = if (cleanDigits.isNotEmpty()) {
-                Uri.parse("https://wa.me/$cleanDigits?text=$encodedText")
-            } else {
-                waUri
-            }
-            context.startActivity(Intent(Intent.ACTION_VIEW, webUri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-            true
-        } catch (_: Exception) {
-            try {
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, message)
-                }
-                context.startActivity(
-                    Intent.createChooser(shareIntent, "Send WhatsApp Message to $parentName")
-                        .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                )
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
+        return WhatsAppDispatchService.startTextChatDispatch(
+            context = context,
+            parentWhatsApp = parentWhatsApp,
+            parentName = parentName,
+            messageText = message,
+            subjectLabel = "Message for $parentName"
+        )
     }
 
     /**
-     * Renders an official high-resolution School Report Card Certificate PNG image and shares it
-     * along with the formatted WhatsApp caption via FileProvider.
+     * Renders an official high-resolution School Report Card Certificate PNG image into the
+     * authorized cache directory and dispatches it securely via [WhatsAppDispatchService].
      */
     fun shareReportCardCertificateImage(
         context: Context,
@@ -188,43 +93,16 @@ object WhatsAppDispatcher {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
-            val contentUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                imageFile
-            )
             val caption = buildWhatsAppReportMessage(report, customIntroNote)
-            val cleanDigits = normalizeWhatsAppDigits(report.parentWhatsApp)
-            val installedPkg = resolveInstalledWhatsAppPackage(context)
-
-            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, contentUri)
-                putExtra(Intent.EXTRA_TEXT, caption)
-                if (cleanDigits.isNotEmpty()) {
-                    putExtra("jid", "$cleanDigits@s.whatsapp.net")
-                }
-                if (installedPkg != null) {
-                    setPackage(installedPkg)
-                }
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            try {
-                context.startActivity(sendIntent)
-            } catch (_: Exception) {
-                val fallbackShare = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, contentUri)
-                    putExtra(Intent.EXTRA_TEXT, caption)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(fallbackShare, "Share Official Report Card Certificate").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
-            }
-            true
+            WhatsAppDispatchService.startReportFileDispatch(
+                context = context,
+                filePath = imageFile.absolutePath,
+                mimeType = "image/png",
+                caption = caption,
+                parentWhatsApp = report.parentWhatsApp,
+                parentName = report.parentName,
+                subjectLabel = "Official Report Card: ${report.studentName}"
+            )
         } catch (_: Exception) {
             false
         }
@@ -241,8 +119,8 @@ object WhatsAppDispatcher {
     }
 
     /**
-     * Sends an uploaded PDF or image report card directly to WhatsApp (targeting the parent's jid
-     * when assigned) using FileProvider. Falls back to the Android share sheet if needed.
+     * Validates and sends an uploaded PDF or image report card through [WhatsAppDispatchService]
+     * pre-filled for the parent's WhatsApp chat (`jid`).
      */
     fun launchWhatsAppWithUploadedFile(
         context: Context,
@@ -252,59 +130,28 @@ object WhatsAppDispatcher {
         principalSignature: String,
         customIntroNote: String = ""
     ): Boolean {
-        val localFile = File(file.localFilePath)
-        if (!localFile.exists()) return false
-        return try {
-            val contentUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                localFile
-            )
-            val caption = buildUploadedFileWhatsAppCaption(
-                file = file,
-                schoolName = schoolName,
-                academicTerm = academicTerm,
-                principalSignature = principalSignature,
-                customIntroNote = customIntroNote
-            )
-            val cleanDigits = normalizeWhatsAppDigits(file.parentWhatsApp)
-            val installedPkg = resolveInstalledWhatsAppPackage(context)
-
-            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                type = file.mimeType.ifBlank { if (file.isPdf) "application/pdf" else "image/*" }
-                putExtra(Intent.EXTRA_STREAM, contentUri)
-                putExtra(Intent.EXTRA_TEXT, caption)
-                if (cleanDigits.isNotEmpty()) {
-                    putExtra("jid", "$cleanDigits@s.whatsapp.net")
-                }
-                if (installedPkg != null) {
-                    setPackage(installedPkg)
-                }
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            try {
-                context.startActivity(sendIntent)
-            } catch (_: Exception) {
-                val fallback = Intent(Intent.ACTION_SEND).apply {
-                    type = file.mimeType.ifBlank { if (file.isPdf) "application/pdf" else "image/*" }
-                    putExtra(Intent.EXTRA_STREAM, contentUri)
-                    putExtra(Intent.EXTRA_TEXT, caption)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(fallback, "Send Report Card via WhatsApp").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
-            }
-            true
-        } catch (_: Exception) {
-            false
-        }
+        val caption = buildUploadedFileWhatsAppCaption(
+            file = file,
+            schoolName = schoolName,
+            academicTerm = academicTerm,
+            principalSignature = principalSignature,
+            customIntroNote = customIntroNote
+        )
+        val mimeType = file.mimeType.ifBlank { if (file.isPdf) "application/pdf" else "image/*" }
+        return WhatsAppDispatchService.startReportFileDispatch(
+            context = context,
+            filePath = file.localFilePath,
+            mimeType = mimeType,
+            caption = caption,
+            parentWhatsApp = file.parentWhatsApp,
+            parentName = file.parentName.ifBlank { file.displayStudentOrFile },
+            subjectLabel = "Report Card: ${file.displayStudentOrFile}"
+        )
     }
 
     /**
-     * Shares multiple selected report card files together to WhatsApp via ACTION_SEND_MULTIPLE.
+     * Validates and shares multiple selected report card files together through [WhatsAppDispatchService].
+     * If all selected files target the same parent WhatsApp number, pre-fills that chat automatically.
      */
     fun shareMultipleFilesToWhatsApp(
         context: Context,
@@ -326,65 +173,43 @@ object WhatsAppDispatcher {
             )
         }
 
-        return try {
-            val uris = ArrayList<Uri>()
-            for (item in files) {
-                val localFile = File(item.localFilePath)
-                if (localFile.exists()) {
-                    uris.add(
-                        FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            localFile
-                        )
-                    )
-                }
-            }
-            if (uris.isEmpty()) return false
-
-            val mimeType = when {
-                files.all { it.isPdf } -> "application/pdf"
-                files.all { it.isImage } -> "image/*"
-                else -> "*/*"
-            }
-            val caption = buildString {
-                append("*${schoolName.uppercase()}*\n")
-                append("Official Report Cards (${uris.size}) • $academicTerm\n")
-                if (customIntroNote.isNotBlank()) {
-                    append("\n${customIntroNote.trim()}\n")
-                }
-                append("\nSigned: $principalSignature")
-            }
-
-            val installedPkg = resolveInstalledWhatsAppPackage(context)
-            val multiIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = mimeType
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                putExtra(Intent.EXTRA_TEXT, caption)
-                if (installedPkg != null) {
-                    setPackage(installedPkg)
-                }
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            try {
-                context.startActivity(multiIntent)
-            } catch (_: Exception) {
-                val fallback = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                    type = mimeType
-                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                    putExtra(Intent.EXTRA_TEXT, caption)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(fallback, "Share ${uris.size} Report Cards").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
-            }
-            true
-        } catch (_: Exception) {
-            false
+        val validPaths = files.mapNotNull { item ->
+            WhatsAppSecurityValidator.resolveAuthorizedReportFile(context, item.localFilePath)?.absolutePath
         }
+        if (validPaths.isEmpty()) return false
+
+        val mimeType = when {
+            files.all { it.isPdf } -> "application/pdf"
+            files.all { it.isImage } -> "image/*"
+            else -> "*/*"
+        }
+        val caption = buildString {
+            append("*${schoolName.uppercase()}*\n")
+            append("Official Report Cards (${validPaths.size}) • $academicTerm\n")
+            if (customIntroNote.isNotBlank()) {
+                append("\n${customIntroNote.trim()}\n")
+            }
+            append("\nSigned: $principalSignature")
+        }
+
+        val uniqueNumbers = files.mapNotNull {
+            WhatsAppSecurityValidator.normalizeE164Digits(it.parentWhatsApp)
+        }.distinct()
+        val sharedParentWhatsApp = if (uniqueNumbers.size == 1) uniqueNumbers.first() else ""
+        val sharedParentName = if (uniqueNumbers.size == 1) {
+            files.firstOrNull { it.parentName.isNotBlank() }?.parentName ?: "Parent"
+        } else {
+            "Parents"
+        }
+
+        return WhatsAppDispatchService.startBatchFilesDispatch(
+            context = context,
+            filePaths = validPaths,
+            mimeType = mimeType,
+            caption = caption,
+            parentWhatsApp = sharedParentWhatsApp,
+            parentName = sharedParentName
+        )
     }
 
     /**

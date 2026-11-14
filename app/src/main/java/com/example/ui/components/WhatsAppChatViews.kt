@@ -827,13 +827,13 @@ fun ParentChatThreadScreen(
                         }
                         val fileToSend = attachedFile
                         val textToSend = draftMessage.trim()
-                        if (fileToSend != null) {
+                        val dispatched = if (fileToSend != null) {
                             val targetedFile = fileToSend.copy(
                                 studentName = target.studentName,
                                 parentName = target.parentName,
                                 parentWhatsApp = target.parentWhatsApp
                             )
-                            WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                            val ok = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                                 context = context,
                                 file = targetedFile,
                                 schoolName = schoolName,
@@ -841,18 +841,22 @@ fun ParentChatThreadScreen(
                                 principalSignature = principalSignature,
                                 customIntroNote = textToSend
                             )
-                            onSendMessage(textToSend, fileToSend)
+                            if (ok) onSendMessage(textToSend, fileToSend)
+                            ok
                         } else {
-                            WhatsAppDispatcher.launchWhatsAppDirectPlainText(
+                            val ok = WhatsAppDispatcher.launchWhatsAppDirectPlainText(
                                 context = context,
                                 parentWhatsApp = target.parentWhatsApp,
                                 parentName = target.parentName,
                                 message = textToSend
                             )
-                            onSendMessage(textToSend, null)
+                            if (ok) onSendMessage(textToSend, null)
+                            ok
                         }
-                        draftMessage = ""
-                        attachedFile = null
+                        if (dispatched) {
+                            draftMessage = ""
+                            attachedFile = null
+                        }
                     },
                     shape = CircleShape,
                     color = WhatsAppGreenAccent,

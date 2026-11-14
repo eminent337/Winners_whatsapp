@@ -429,7 +429,7 @@ fun UploadedFolderTab(
                     },
                     onQuickSend = {
                         if (file.hasAssignedRecipient) {
-                            WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                            val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                                 context = context,
                                 file = file,
                                 schoolName = schoolName,
@@ -437,7 +437,9 @@ fun UploadedFolderTab(
                                 principalSignature = principalSignature,
                                 customIntroNote = customIntroNote
                             )
-                            onMarkFilesDispatched(listOf(file.id))
+                            if (launched) {
+                                onMarkFilesDispatched(listOf(file.id))
+                            }
                         } else {
                             onRequestAssignRecipient(file)
                         }
@@ -985,7 +987,7 @@ fun UploadedReportPreviewScreen(
 
                 Surface(
                     onClick = {
-                        WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                        val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                             context = context,
                             file = file,
                             schoolName = schoolName,
@@ -993,7 +995,9 @@ fun UploadedReportPreviewScreen(
                             principalSignature = principalSignature,
                             customIntroNote = customParentNote
                         )
-                        onMarkDispatched(listOf(file.id))
+                        if (launched) {
+                            onMarkDispatched(listOf(file.id))
+                        }
                     },
                     shape = CircleShape,
                     color = WhatsAppGreenAccent,
@@ -1298,7 +1302,7 @@ fun BatchSelectedSendDialog(
 
                     Button(
                         onClick = {
-                            WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                            val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                                 context = context,
                                 file = currentFile,
                                 schoolName = schoolName,
@@ -1306,7 +1310,9 @@ fun BatchSelectedSendDialog(
                                 principalSignature = principalSignature,
                                 customIntroNote = customIntroNote
                             )
-                            onMarkDispatched(listOf(currentFile.id))
+                            if (launched) {
+                                onMarkDispatched(listOf(currentFile.id))
+                            }
                             if (safeIndex < selectedFiles.size - 1) {
                                 currentIndex = safeIndex + 1
                             } else {
@@ -1342,7 +1348,7 @@ fun BatchSelectedSendDialog(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                WhatsAppDispatcher.shareMultipleFilesToWhatsApp(
+                                val launched = WhatsAppDispatcher.shareMultipleFilesToWhatsApp(
                                     context = context,
                                     files = selectedFiles,
                                     schoolName = schoolName,
@@ -1350,7 +1356,9 @@ fun BatchSelectedSendDialog(
                                     principalSignature = principalSignature,
                                     customIntroNote = customIntroNote
                                 )
-                                onMarkDispatched(selectedFiles.map { it.id })
+                                if (launched) {
+                                    onMarkDispatched(selectedFiles.map { it.id })
+                                }
                                 onDismiss()
                             },
                             shape = CircleShape

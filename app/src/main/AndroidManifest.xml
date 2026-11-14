@@ -20,6 +20,10 @@
             <data android:mimeType="application/pdf" />
         </intent>
         <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+        <intent>
             <action android:name="android.intent.action.SEND_MULTIPLE" />
             <data android:mimeType="*/*" />
         </intent>
@@ -45,6 +49,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".service.WhatsAppDispatchService"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
