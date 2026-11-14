@@ -1,0 +1,290 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "A school student record with parent WhatsApp contact information.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated educator or school administrator."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the student (1 to 100 chars)."
+        },
+        "studentCode": {
+          "type": "string",
+          "description": "School roll number or student ID code (1 to 40 chars)."
+        },
+        "gradeClass": {
+          "type": "string",
+          "description": "Class or grade level (1 to 50 chars)."
+        },
+        "parentName": {
+          "type": "string",
+          "description": "Full name of the parent or guardian (1 to 100 chars)."
+        },
+        "parentWhatsApp": {
+          "type": "string",
+          "description": "Parent WhatsApp phone number in international format (5 to 30 chars)."
+        },
+        "attendanceDays": {
+          "type": "integer",
+          "description": "Number of days attended this term (0 to 366)."
+        },
+        "totalTermDays": {
+          "type": "integer",
+          "description": "Total number of school days in the term (1 to 366)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the student was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the student was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "fullName",
+        "studentCode",
+        "gradeClass",
+        "parentName",
+        "parentWhatsApp",
+        "attendanceDays",
+        "totalTermDays",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReportCard": {
+      "title": "ReportCard",
+      "description": "An academic term report card for a student with subject grades and WhatsApp dispatch tracking.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated educator or school administrator."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference ID of the student document (1 to 128 chars)."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student full name (1 to 100 chars)."
+        },
+        "studentCode": {
+          "type": "string",
+          "description": "Student code or roll number (1 to 40 chars)."
+        },
+        "gradeClass": {
+          "type": "string",
+          "description": "Class or grade level (1 to 50 chars)."
+        },
+        "parentName": {
+          "type": "string",
+          "description": "Parent or guardian name (1 to 100 chars)."
+        },
+        "parentWhatsApp": {
+          "type": "string",
+          "description": "Parent WhatsApp number (5 to 30 chars)."
+        },
+        "schoolName": {
+          "type": "string",
+          "description": "Name of the school issuing the report card (1 to 120 chars)."
+        },
+        "academicTerm": {
+          "type": "string",
+          "description": "Academic term and year label (1 to 60 chars)."
+        },
+        "attendanceSummary": {
+          "type": "string",
+          "description": "Formatted attendance summary string (1 to 40 chars)."
+        },
+        "subjectsSummary": {
+          "type": "string",
+          "description": "Pipe-and-newline delimited subject breakdown rows: Subject|Score|Grade|Remark (1 to 1500 chars)."
+        },
+        "overallScore": {
+          "type": "integer",
+          "description": "Overall average score percentage (0 to 100)."
+        },
+        "overallGrade": {
+          "type": "string",
+          "description": "Overall letter grade (1 to 10 chars)."
+        },
+        "classPosition": {
+          "type": "string",
+          "description": "Rank or position in class (1 to 30 chars)."
+        },
+        "teacherRemarks": {
+          "type": "string",
+          "description": "Form teacher or principal remarks (1 to 500 chars)."
+        },
+        "principalSignature": {
+          "type": "string",
+          "description": "Signatory name and title (1 to 100 chars)."
+        },
+        "whatsappStatus": {
+          "type": "string",
+          "enum": ["pending", "sent", "reminded"],
+          "description": "Current WhatsApp delivery workflow status."
+        },
+        "dispatchCount": {
+          "type": "integer",
+          "description": "Number of times this report card has been dispatched via WhatsApp."
+        },
+        "lastSentAt": {
+          "type": "string",
+          "description": "Human-readable timestamp of the last WhatsApp send (0 to 60 chars)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the report card was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the report card was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "studentId",
+        "studentName",
+        "studentCode",
+        "gradeClass",
+        "parentName",
+        "parentWhatsApp",
+        "schoolName",
+        "academicTerm",
+        "attendanceSummary",
+        "subjectsSummary",
+        "overallScore",
+        "overallGrade",
+        "classPosition",
+        "teacherRemarks",
+        "principalSignature",
+        "whatsappStatus",
+        "dispatchCount",
+        "lastSentAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A WhatsApp-style chat message or dispatched report card entry in a parent conversation thread.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated educator or school administrator."
+        },
+        "threadKey": {
+          "type": "string",
+          "description": "Normalized parent phone digits or student thread identifier (1 to 60 chars)."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Optional student document ID (0 to 128 chars)."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student name associated with this parent chat (1 to 100 chars)."
+        },
+        "parentName": {
+          "type": "string",
+          "description": "Parent or guardian display name (1 to 100 chars)."
+        },
+        "parentWhatsApp": {
+          "type": "string",
+          "description": "Parent WhatsApp number in international format (5 to 30 chars)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["outgoing", "incoming"],
+          "description": "Message direction: outgoing from school or incoming logged reply from parent."
+        },
+        "messageText": {
+          "type": "string",
+          "description": "Message body or report card caption (1 to 1500 chars)."
+        },
+        "attachmentFileId": {
+          "type": "string",
+          "description": "Local uploaded report card ID if a file was attached (0 to 128 chars)."
+        },
+        "attachmentFileName": {
+          "type": "string",
+          "description": "Filename of the attached PDF or image report card (0 to 140 chars)."
+        },
+        "attachmentMimeType": {
+          "type": "string",
+          "description": "MIME type of the attached report card (0 to 60 chars)."
+        },
+        "deliveryStatus": {
+          "type": "string",
+          "enum": ["sent", "delivered", "received"],
+          "description": "WhatsApp bubble tick state."
+        },
+        "sentTimeLabel": {
+          "type": "string",
+          "description": "Formatted display time for the chat bubble (1 to 60 chars)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the chat message was logged."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the chat message was last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "threadKey",
+        "studentId",
+        "studentName",
+        "parentName",
+        "parentWhatsApp",
+        "direction",
+        "messageText",
+        "attachmentFileId",
+        "attachmentFileName",
+        "attachmentMimeType",
+        "deliveryStatus",
+        "sentTimeLabel",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/students/{studentId}": {
+      "schema": {
+        "$ref": "#/entities/Student"
+      },
+      "description": "User-scoped collection of students and parent WhatsApp contacts."
+    },
+    "/users/{userId}/report_cards/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/ReportCard"
+      },
+      "description": "User-scoped collection of academic report cards and WhatsApp delivery statuses."
+    },
+    "/users/{userId}/chat_messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ChatMessage"
+      },
+      "description": "User-scoped WhatsApp chat history and dispatched report card log per parent."
+    }
+  }
+}

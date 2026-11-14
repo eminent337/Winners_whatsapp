@@ -1,0 +1,204 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidStudent(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+             data.studentCode is string && data.studentCode.size() >= 1 && data.studentCode.size() <= 40 &&
+             data.gradeClass is string && data.gradeClass.size() >= 1 && data.gradeClass.size() <= 50 &&
+             data.parentName is string && data.parentName.size() >= 1 && data.parentName.size() <= 100 &&
+             data.parentWhatsApp is string && data.parentWhatsApp.size() >= 5 && data.parentWhatsApp.size() <= 30 &&
+             data.attendanceDays is int && data.attendanceDays >= 0 && data.attendanceDays <= 366 &&
+             data.totalTermDays is int && data.totalTermDays >= 1 && data.totalTermDays <= 366 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidReportCard(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.studentId is string && data.studentId.size() >= 1 && data.studentId.size() <= 128 &&
+             data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100 &&
+             data.studentCode is string && data.studentCode.size() >= 1 && data.studentCode.size() <= 40 &&
+             data.gradeClass is string && data.gradeClass.size() >= 1 && data.gradeClass.size() <= 50 &&
+             data.parentName is string && data.parentName.size() >= 1 && data.parentName.size() <= 100 &&
+             data.parentWhatsApp is string && data.parentWhatsApp.size() >= 5 && data.parentWhatsApp.size() <= 30 &&
+             data.schoolName is string && data.schoolName.size() >= 1 && data.schoolName.size() <= 120 &&
+             data.academicTerm is string && data.academicTerm.size() >= 1 && data.academicTerm.size() <= 60 &&
+             data.attendanceSummary is string && data.attendanceSummary.size() >= 1 && data.attendanceSummary.size() <= 40 &&
+             data.subjectsSummary is string && data.subjectsSummary.size() >= 1 && data.subjectsSummary.size() <= 1500 &&
+             data.overallScore is int && data.overallScore >= 0 && data.overallScore <= 100 &&
+             data.overallGrade is string && data.overallGrade.size() >= 1 && data.overallGrade.size() <= 10 &&
+             data.classPosition is string && data.classPosition.size() >= 1 && data.classPosition.size() <= 30 &&
+             data.teacherRemarks is string && data.teacherRemarks.size() >= 1 && data.teacherRemarks.size() <= 500 &&
+             data.principalSignature is string && data.principalSignature.size() >= 1 && data.principalSignature.size() <= 100 &&
+             data.whatsappStatus is string && data.whatsappStatus in ['pending', 'sent', 'reminded'] &&
+             data.dispatchCount is int && data.dispatchCount >= 0 && data.dispatchCount <= 1000 &&
+             data.lastSentAt is string && data.lastSentAt.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidChatMessage(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.threadKey is string && data.threadKey.size() >= 1 && data.threadKey.size() <= 60 &&
+             data.studentId is string && data.studentId.size() <= 128 &&
+             data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100 &&
+             data.parentName is string && data.parentName.size() >= 1 && data.parentName.size() <= 100 &&
+             data.parentWhatsApp is string && data.parentWhatsApp.size() >= 5 && data.parentWhatsApp.size() <= 30 &&
+             data.direction is string && data.direction in ['outgoing', 'incoming'] &&
+             data.messageText is string && data.messageText.size() >= 1 && data.messageText.size() <= 1500 &&
+             data.attachmentFileId is string && data.attachmentFileId.size() <= 128 &&
+             data.attachmentFileName is string && data.attachmentFileName.size() <= 140 &&
+             data.attachmentMimeType is string && data.attachmentMimeType.size() <= 60 &&
+             data.deliveryStatus is string && data.deliveryStatus in ['sent', 'delivered', 'received'] &&
+             data.sentTimeLabel is string && data.sentTimeLabel.size() >= 1 && data.sentTimeLabel.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/students/{studentId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(studentId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(studentId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'fullName', 'studentCode', 'gradeClass',
+                         'parentName', 'parentWhatsApp', 'attendanceDays',
+                         'totalTermDays', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'fullName', 'studentCode', 'gradeClass',
+                         'parentName', 'parentWhatsApp', 'attendanceDays',
+                         'totalTermDays', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidStudent(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(studentId) &&
+                       isValidStudent(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'fullName', 'studentCode', 'gradeClass',
+                         'parentName', 'parentWhatsApp', 'attendanceDays',
+                         'totalTermDays', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(studentId);
+    }
+
+    match /users/{userId}/report_cards/{reportId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(reportId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(reportId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'studentId', 'studentName', 'studentCode',
+                         'gradeClass', 'parentName', 'parentWhatsApp',
+                         'schoolName', 'academicTerm', 'attendanceSummary',
+                         'subjectsSummary', 'overallScore', 'overallGrade',
+                         'classPosition', 'teacherRemarks', 'principalSignature',
+                         'whatsappStatus', 'dispatchCount', 'lastSentAt',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'studentId', 'studentName', 'studentCode',
+                         'gradeClass', 'parentName', 'parentWhatsApp',
+                         'schoolName', 'academicTerm', 'attendanceSummary',
+                         'subjectsSummary', 'overallScore', 'overallGrade',
+                         'classPosition', 'teacherRemarks', 'principalSignature',
+                         'whatsappStatus', 'dispatchCount', 'lastSentAt',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidReportCard(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(reportId) &&
+                       isValidReportCard(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action 1: Mark WhatsApp dispatch status
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'whatsappStatus', 'dispatchCount', 'lastSentAt', 'updatedAt'
+                         ]) ||
+                         // Action 2: Edit report card details
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'studentId', 'studentName', 'studentCode', 'gradeClass',
+                           'parentName', 'parentWhatsApp', 'schoolName', 'academicTerm',
+                           'attendanceSummary', 'subjectsSummary', 'overallScore',
+                           'overallGrade', 'classPosition', 'teacherRemarks',
+                           'principalSignature', 'whatsappStatus', 'dispatchCount',
+                           'lastSentAt', 'updatedAt'
+                         ])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(reportId);
+    }
+
+    match /users/{userId}/chat_messages/{messageId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(messageId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'threadKey', 'studentId', 'studentName',
+                         'parentName', 'parentWhatsApp', 'direction', 'messageText',
+                         'attachmentFileId', 'attachmentFileName', 'attachmentMimeType',
+                         'deliveryStatus', 'sentTimeLabel', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'threadKey', 'studentId', 'studentName',
+                         'parentName', 'parentWhatsApp', 'direction', 'messageText',
+                         'attachmentFileId', 'attachmentFileName', 'attachmentMimeType',
+                         'deliveryStatus', 'sentTimeLabel', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidChatMessage(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(messageId) &&
+                       isValidChatMessage(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'deliveryStatus', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+    }
+  }
+}

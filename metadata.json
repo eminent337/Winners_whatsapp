@@ -1,0 +1,6 @@
+{
+  "name": "GradePulse",
+  "description": "School report card management and instant WhatsApp parent dispatch system for educators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

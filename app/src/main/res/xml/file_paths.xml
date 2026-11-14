@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path
+        name="report_card_certificates"
+        path="report_cards/" />
+    <files-path
+        name="uploaded_report_cards"
+        path="uploaded_report_cards/" />
+</paths>
