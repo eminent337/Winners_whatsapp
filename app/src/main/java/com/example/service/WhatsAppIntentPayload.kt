@@ -1,6 +1,7 @@
 package com.example.service
 
 import android.content.ClipData
+import com.example.data.model.DocumentMime
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -185,8 +186,12 @@ object WhatsAppIntentFactory {
         val contentUri = WhatsAppSecurityValidator.getAuthorizedFileUri(context, authorizedFile.path)
             ?: return null
 
+        // Trust the caller's MIME, then the extension map. Never default to
+        // image/* — that made WhatsApp reject zips and office documents.
         val resolvedMime = mimeType.ifBlank {
-            if (authorizedFile.name.endsWith(".pdf", ignoreCase = true)) "application/pdf" else "image/*"
+            DocumentMime.mimeFromName(authorizedFile.name)
+                ?: if (authorizedFile.name.endsWith(".pdf", ignoreCase = true)) "application/pdf"
+                else "application/octet-stream"
         }
         val chatJid = WhatsAppSecurityValidator.buildWhatsAppJid(parentWhatsApp)
 

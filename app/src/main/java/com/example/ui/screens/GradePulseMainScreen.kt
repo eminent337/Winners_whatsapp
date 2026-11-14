@@ -87,6 +87,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.model.DocumentMime
 import com.example.data.model.Student
 import com.example.data.model.UploadedReportFile
 import com.example.data.model.normalizeThreadKey
@@ -577,7 +578,7 @@ fun GradePulseMainScreen(
                 1 -> {
                     FloatingActionButton(
                         onClick = {
-                            multiDocPicker.launch(arrayOf("application/pdf", "image/*"))
+                            multiDocPicker.launch(DocumentMime.acceptedMimeTypes())
                         },
                         shape = RoundedCornerShape(16.dp),
                         containerColor = WhatsAppGreenAccent,
@@ -664,7 +665,7 @@ fun GradePulseMainScreen(
                     customIntroNote = schoolSettings.customWhatsAppGreeting,
                     isBusy = schoolSettings.isSaving || schoolSettings.isSeeding,
                     onUploadFilesClick = {
-                        multiDocPicker.launch(arrayOf("application/pdf", "image/*"))
+                        multiDocPicker.launch(DocumentMime.acceptedMimeTypes())
                     },
                     onImportFolderClick = {
                         folderTreePicker.launch(null)

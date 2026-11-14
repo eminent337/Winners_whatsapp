@@ -29,6 +29,36 @@ data class UploadedReportFile(
             fileName.endsWith(".jpeg", ignoreCase = true) ||
             fileName.endsWith(".webp", ignoreCase = true)
 
+    /** Zip / archive attachments. */
+    val isZip: Boolean
+        get() = mimeType.equals("application/zip", ignoreCase = true) ||
+            mimeType.contains("compressed", ignoreCase = true) ||
+            fileName.endsWith(".zip", ignoreCase = true) ||
+            fileName.endsWith(".rar", ignoreCase = true) ||
+            fileName.endsWith(".7z", ignoreCase = true)
+
+    /** Word / Excel / PowerPoint / plain text documents. */
+    val isDocument: Boolean
+        get() = DocumentMime.isDocument(mimeType, fileName)
+
+    /** Anything that is not a plain report card — i.e. a general attachment. */
+    val isGeneralAttachment: Boolean
+        get() = isZip || isDocument
+
+    /** Short uppercase badge shown in the file row. */
+    val typeBadge: String
+        get() = when {
+            isPdf -> "PDF"
+            isImage -> "IMG"
+            isZip -> "ZIP"
+            fileName.endsWith(".doc", true) || fileName.endsWith(".docx", true) -> "DOC"
+            fileName.endsWith(".xls", true) || fileName.endsWith(".xlsx", true) ||
+                fileName.endsWith(".csv", true) -> "XLS"
+            fileName.endsWith(".ppt", true) || fileName.endsWith(".pptx", true) -> "PPT"
+            fileName.endsWith(".txt", true) -> "TXT"
+            else -> "FILE"
+        }
+
     val isSent: Boolean
         get() = whatsappStatus == "sent" || dispatchCount > 0L
 

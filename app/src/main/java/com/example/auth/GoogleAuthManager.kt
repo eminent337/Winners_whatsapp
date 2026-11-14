@@ -156,10 +156,12 @@ fun AuthScreen(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.School,
+                        Image(
+                            painter = painterResource(id = R.drawable.winners_family_school_logo),
                             contentDescription = "Winners Family School Crest",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(

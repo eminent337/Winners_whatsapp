@@ -53,6 +53,9 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -507,13 +510,18 @@ private fun WhatsAppFolderFileRow(
                     Icon(
                         imageVector = when {
                             isSelected -> Icons.Default.Check
+                            file.isZip -> Icons.Default.FolderZip
                             file.isPdf -> Icons.Default.PictureAsPdf
-                            else -> Icons.Default.Image
+                            file.isDocument -> Icons.Default.Description
+                            file.isImage -> Icons.Default.Image
+                            else -> Icons.Default.InsertDriveFile
                         },
                         contentDescription = if (isSelected) "Selected" else file.fileName,
                         tint = when {
                             isSelected -> Color.White
+                            file.isZip -> Color(0xFFB26A00)
                             file.isPdf -> Color(0xFFD93025)
+                            file.isDocument -> Color(0xFF1A73E8)
                             else -> MaterialTheme.colorScheme.onPrimaryContainer
                         },
                         modifier = Modifier.size(24.dp)
@@ -540,7 +548,7 @@ private fun WhatsAppFolderFileRow(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "${if (file.isPdf) "PDF" else "IMG"} • ${file.formattedSize}",
+                        text = "${file.typeBadge} • ${file.formattedSize}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

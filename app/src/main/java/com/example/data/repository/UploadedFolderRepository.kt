@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import com.example.data.model.Student
+import com.example.data.model.DocumentMime
 import com.example.data.model.UploadedReportFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -519,7 +520,7 @@ class UploadedFolderRepository(
             fileName.endsWith(".jpg", ignoreCase = true) ||
                 fileName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
             fileName.endsWith(".webp", ignoreCase = true) -> "image/webp"
-            else -> "application/pdf"
+            else -> DocumentMime.mimeFromName(fileName) ?: "application/pdf"
         }
     }
 
@@ -530,7 +531,12 @@ class UploadedFolderRepository(
             fileName.endsWith(".png", ignoreCase = true) ||
             fileName.endsWith(".jpg", ignoreCase = true) ||
             fileName.endsWith(".jpeg", ignoreCase = true) ||
-            fileName.endsWith(".webp", ignoreCase = true)
+            fileName.endsWith(".webp", ignoreCase = true) ||
+            // ZIP archives and office/plain-text documents
+            fileName.endsWith(".zip", ignoreCase = true) ||
+            fileName.endsWith(".rar", ignoreCase = true) ||
+            fileName.endsWith(".7z", ignoreCase = true) ||
+            DocumentMime.isDocument(mimeType, fileName)
     }
 
     private fun copyUriToFile(uri: Uri, destFile: File): Long {
