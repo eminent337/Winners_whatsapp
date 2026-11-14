@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GradePulse — Winners Family School</title>
+  <style>
+    :root {
+      --wa-teal: #008069;
+      --wa-teal-dark: #005c4b;
+      --wa-green: #1dab61;
+      --wa-bg: #efeae2;
+      --card: #ffffff;
+      --text: #111b21;
+      --muted: #54656f;
+      --border: #e9edef;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--wa-bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+    }
+    .header {
+      width: 100%;
+      max-width: 480px;
+      background: var(--wa-teal);
+      color: #ffffff;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 22px 20px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.18);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      margin-bottom: 10px;
+    }
+    .header h1 {
+      margin: 0 0 4px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    .header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.92;
+    }
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border-radius: 0 0 20px 20px;
+      padding: 22px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    .download-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      background: var(--wa-green);
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 15px 20px;
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(29, 171, 97, 0.3);
+      transition: background 0.15s ease;
+    }
+    .download-btn:hover {
+      background: var(--wa-teal-dark);
+    }
+    .meta {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--wa-teal);
+    }
+    ol {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    li + li { margin-top: 6px; }
+    strong { color: var(--text); }
+    .footer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="badge">ANDROID APP INSTALLER</span>
+    <h1>GradePulse</h1>
+    <p>Winners Family School • WhatsApp Report Card Dispatch</p>
+  </div>
+  <div class="card">
+    <a class="download-btn" href="./GradePulse-WinnersFamilySchool.apk" download="GradePulse-WinnersFamilySchool.apk">
+      <span>Download Android App (.apk)</span>
+    </a>
+    <div class="meta">For Android 7.0+ phones &amp; tablets</div>
+
+    <div class="divider"></div>
+
+    <h2>How to Install on Another Android Phone</h2>
+    <ol>
+      <li>Open this page in Chrome on your Android device and tap <strong>Download Android App (.apk)</strong>.</li>
+      <li>Tap <strong>Open</strong> once the download finishes (or find it in your <strong>Downloads</strong> app).</li>
+      <li>If Android prompts, enable <strong>Allow from this source</strong> and tap <strong>Install</strong>.</li>
+      <li>Sign in with Google to sync <strong>Winners Family School</strong> parent contacts and WhatsApp chat history.</li>
+    </ol>
+  </div>
+  <div class="footer">
+    Signed &amp; distributed via GitHub Pages • Winners Family School
+  </div>
+</body>
+</html>
