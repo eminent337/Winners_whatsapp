@@ -86,15 +86,28 @@ fun CreateStudentDialog(
         parentWhatsApp: String,
         attendanceDays: Long,
         totalTermDays: Long
-    ) -> Unit
+    ) -> Unit,
+    /** When set, the dialog edits this student instead of adding a new one. */
+    editingStudent: Student? = null
 ) {
-    var fullName by remember { mutableStateOf("") }
-    var studentCode by remember { mutableStateOf("GP-2026-${(105..999).random()}") }
-    var gradeClass by remember { mutableStateOf("Grade 8 • Emerald") }
-    var parentName by remember { mutableStateOf("") }
-    var parentWhatsApp by remember { mutableStateOf("+233") }
-    var attendanceDaysStr by remember { mutableStateOf("63") }
-    var totalTermDaysStr by remember { mutableStateOf("65") }
+    val isEditing = editingStudent != null
+    var fullName by remember(editingStudent) { mutableStateOf(editingStudent?.fullName.orEmpty()) }
+    var studentCode by remember(editingStudent) {
+        mutableStateOf(editingStudent?.studentCode ?: "GP-2026-${(105..999).random()}")
+    }
+    var gradeClass by remember(editingStudent) {
+        mutableStateOf(editingStudent?.gradeClass ?: "Grade 8 • Emerald")
+    }
+    var parentName by remember(editingStudent) { mutableStateOf(editingStudent?.parentName.orEmpty()) }
+    var parentWhatsApp by remember(editingStudent) {
+        mutableStateOf(editingStudent?.parentWhatsApp ?: "+233")
+    }
+    var attendanceDaysStr by remember(editingStudent) {
+        mutableStateOf((editingStudent?.attendanceDays ?: 63L).toString())
+    }
+    var totalTermDaysStr by remember(editingStudent) {
+        mutableStateOf((editingStudent?.totalTermDays ?: 65L).toString())
+    }
     var validationError by remember { mutableStateOf<String?>(null) }
 
     val presetClasses = listOf(
@@ -131,7 +144,7 @@ fun CreateStudentDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Add Student & Parent WhatsApp",
+                        text = if (isEditing) "Edit Student & Parent WhatsApp" else "Add Student & Parent WhatsApp",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -298,7 +311,7 @@ fun CreateStudentDialog(
                         ),
                         modifier = Modifier.testTag("confirm_save_student_button")
                     ) {
-                        Text("Save Student", fontWeight = FontWeight.SemiBold)
+                        Text(if (isEditing) "Save Changes" else "Save Student", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

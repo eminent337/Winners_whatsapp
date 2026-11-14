@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -137,6 +138,7 @@ fun GradePulseMainScreen(
     var activeChatTarget by remember { mutableStateOf<ActiveChatTarget?>(null) }
     var fileForRecipientAssign by remember { mutableStateOf<UploadedReportFile?>(null) }
     var showCreateStudentDialog by remember { mutableStateOf(false) }
+    var studentToEdit by remember { mutableStateOf<Student?>(null) }
     var showStartNewChatDialog by remember { mutableStateOf(false) }
     var showBatchSelectedSendDialog by remember { mutableStateOf(false) }
 
@@ -185,7 +187,27 @@ fun GradePulseMainScreen(
                 previewFileId = null
             }
         )
-        fileForRecipientAssign?.let { target ->
+        studentToEdit?.let { editing ->
+        CreateStudentDialog(
+            editingStudent = editing,
+            onDismiss = { studentToEdit = null },
+            onConfirm = { fullName, code, gradeClass, parentName, parentWhatsApp, attended, total ->
+                viewModel.updateStudent(
+                    student = editing,
+                    fullName = fullName,
+                    studentCode = code,
+                    gradeClass = gradeClass,
+                    parentName = parentName,
+                    parentWhatsApp = parentWhatsApp,
+                    attendanceDays = attended,
+                    totalTermDays = total,
+                    onComplete = { studentToEdit = null }
+                )
+            }
+        )
+    }
+
+    fileForRecipientAssign?.let { target ->
             AssignParentDialog(
                 file = target,
                 students = studentsList,
@@ -710,7 +732,8 @@ fun GradePulseMainScreen(
                             parentName = stu.parentName,
                             parentWhatsApp = stu.parentWhatsApp
                         )
-                    }
+                    },
+                    onEditStudent = { stu -> studentToEdit = stu }
                 )
                 3 -> NeatSchoolSettingsTab(
                     settings = schoolSettings,
@@ -838,7 +861,8 @@ private fun NeatStudentsDirectoryTab(
     searchQuery: String,
     onAddStudent: () -> Unit,
     onToggleSelectStudent: (String) -> Unit,
-    onOpenChatForStudent: (Student) -> Unit
+    onOpenChatForStudent: (Student) -> Unit,
+    onEditStudent: (Student) -> Unit
 ) {
     val allStudents = (studentsState as? UiState.Success)?.data ?: emptyList()
     val filteredStudents = remember(allStudents, searchQuery) {
@@ -990,6 +1014,13 @@ private fun NeatStudentsDirectoryTab(
                             )
                         }
                         if (!isSelectionMode) {
+                            IconButton(onClick = { onEditStudent(student) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit student or parent number",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
                             IconButton(onClick = { onOpenChatForStudent(student) }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Chat,

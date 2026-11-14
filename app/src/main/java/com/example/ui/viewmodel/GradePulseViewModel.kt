@@ -300,6 +300,47 @@ class GradePulseViewModel(
         }
     }
 
+    /**
+     * Update an existing student — corrects a wrong parent number, a misspelt
+     * name or a missing contact without deleting and re-adding the row.
+     */
+    fun updateStudent(
+        student: Student,
+        fullName: String,
+        studentCode: String,
+        gradeClass: String,
+        parentName: String,
+        parentWhatsApp: String,
+        attendanceDays: Long,
+        totalTermDays: Long,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _schoolSettings.update { it.copy(isSaving = true) }
+            val updated = student.copy(
+                fullName = fullName,
+                studentCode = studentCode,
+                gradeClass = gradeClass,
+                parentName = parentName,
+                parentWhatsApp = parentWhatsApp,
+                attendanceDays = attendanceDays,
+                totalTermDays = totalTermDays
+            )
+            val res = repository.updateStudent(updated)
+            _schoolSettings.update {
+                it.copy(
+                    isSaving = false,
+                    statusBannerMessage = if (res.isSuccess) {
+                        "Updated $fullName — WhatsApp ${parentWhatsApp}"
+                    } else {
+                        "Failed to update student: ${res.exceptionOrNull()?.localizedMessage}"
+                    }
+                )
+            }
+            if (res.isSuccess) onComplete()
+        }
+    }
+
     fun deleteStudent(studentId: String) {
         viewModelScope.launch {
             repository.deleteStudent(studentId)
