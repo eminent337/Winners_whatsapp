@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.R
 import com.example.data.OperationType
+import com.example.data.RosterParser
 import com.example.data.handleFirestoreError
 import com.example.data.model.ChatMessage
 import com.example.data.model.ReportCard
@@ -291,6 +292,51 @@ class GradePulseRepository internal constructor(
     suspend fun deleteReportCard(reportId: String): Result<Unit> = runCatching {
         reportsFlow.value = reportsFlow.value.filterNot { it.id == reportId }
         persistReports()
+    }
+
+    /**
+     * Imports a parsed roster, skipping students already present (matched on
+     * normalised phone number) so a re-import is safe.
+     *
+     * Returns the number of students actually added.
+     */
+    suspend fun importStudents(entries: List<RosterParser.ParsedStudent>): Result<Int> = runCatching {
+        if (entries.isEmpty()) return@runCatching 0
+        val uid = requireUserId()
+        val now = System.currentTimeMillis()
+        val existingPhones = studentsFlow.value.mapNotNull { normalizePhone(it.parentWhatsApp) }.toSet()
+
+        val added = entries.filter { entry ->
+            val p = normalizePhone(entry.parentWhatsApp)
+            p == null || p !in existingPhones
+        }
+
+        val created = added.map { entry ->
+            Student(
+                id = UUID.randomUUID().toString(),
+                userId = uid,
+                fullName = entry.fullName.take(100),
+                studentCode = entry.studentCode.ifBlank { "WFS-${System.currentTimeMillis() % 100000}" }.take(40),
+                gradeClass = entry.gradeClass.ifBlank { "BECE 2027" }.take(50),
+                parentName = "Parent/Guardian",
+                parentWhatsApp = entry.parentWhatsApp,
+                attendanceDays = 65L,
+                totalTermDays = 65L,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
+
+        if (created.isNotEmpty()) {
+            studentsFlow.value = studentsFlow.value + created
+            persistStudents()
+        }
+        created.size
+    }
+
+    private fun normalizePhone(raw: String): String? = when {
+        raw.isBlank() -> null
+        else -> RosterParser.normalizeGhanaNumber(raw)
     }
 
     suspend fun seedSampleSchoolData(): Result<Unit> = runCatching {

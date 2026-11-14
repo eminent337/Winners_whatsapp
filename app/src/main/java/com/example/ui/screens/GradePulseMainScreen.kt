@@ -718,7 +718,8 @@ fun GradePulseMainScreen(
                         viewModel.updateSchoolConfig(school, term, sig, greeting)
                     },
                     onSeedSampleRoster = { viewModel.seedSampleRoster() },
-                    onGenerateSamplePdfs = { viewModel.generateSamplePdfReports() }
+                    onGenerateSamplePdfs = { viewModel.generateSamplePdfReports() },
+                    onImportRoster = { text -> viewModel.importRoster(text) }
                 )
             }
         }
@@ -1014,18 +1015,21 @@ private fun NeatSchoolSettingsTab(
     userDisplayName: String?,
     onSaveSettings: (String, String, String, String) -> Unit,
     onSeedSampleRoster: () -> Unit,
-    onGenerateSamplePdfs: () -> Unit
+    onGenerateSamplePdfs: () -> Unit,
+    onImportRoster: (String) -> Unit
 ) {
     var schoolName by remember(settings.schoolName) { mutableStateOf(settings.schoolName) }
     var academicTerm by remember(settings.academicTerm) { mutableStateOf(settings.academicTerm) }
     var principalSignature by remember(settings.principalSignature) { mutableStateOf(settings.principalSignature) }
     var customGreeting by remember(settings.customWhatsAppGreeting) { mutableStateOf(settings.customWhatsAppGreeting) }
+    var showImportDialog by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
         item {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1140,6 +1144,21 @@ private fun NeatSchoolSettingsTab(
                     Text("Add Sample PDF Report Cards to Folder")
                 }
 
+                Button(
+                    onClick = { showImportDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("import_roster_button"),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Import Student Roster", fontWeight = FontWeight.Bold)
+                }
+
                 OutlinedButton(
                     onClick = onSeedSampleRoster,
                     modifier = Modifier
@@ -1152,5 +1171,60 @@ private fun NeatSchoolSettingsTab(
                 }
             }
         }
+        }
+
+        if (showImportDialog) {
+            ImportRosterDialog(
+                onDismiss = { showImportDialog = false },
+                onConfirm = { text ->
+                    showImportDialog = false
+                    onImportRoster(text)
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun ImportRosterDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var rosterText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import Student Roster") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Paste rows copied from Excel or the bio-data form. " +
+                        "Include a phone column; Ghanaian numbers are normalised automatically.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = rosterText,
+                    onValueChange = { rosterText = it },
+                    placeholder = { Text("SURNAME  FIRST NAME  PARENT CONTACT\nADDEY  JOSEPHINE  0538604588") },
+                    minLines = 6,
+                    maxLines = 10,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(rosterText) },
+                enabled = rosterText.isNotBlank(),
+                shape = CircleShape
+            ) {
+                Text("Import")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

@@ -17,6 +17,7 @@ import com.example.data.model.SubjectGradeRow
 import com.example.data.model.UploadedReportFile
 import com.example.data.model.buildUploadedFileWhatsAppCaption
 import com.example.data.model.normalizeThreadKey
+import com.example.data.RosterParser
 import com.example.data.repository.GradePulseRepository
 import com.example.data.repository.UploadedFolderRepository
 import com.example.service.WhatsAppDispatchResult
@@ -221,6 +222,30 @@ class GradePulseViewModel(
 
     fun showBannerMessage(message: String) {
         _schoolSettings.update { it.copy(statusBannerMessage = message) }
+    }
+
+    /** Parses pasted roster text and imports the valid rows. */
+    fun importRoster(rawText: String, gradeClass: String = "BECE 2027") {
+        viewModelScope.launch {
+            _schoolSettings.update { it.copy(isSaving = true) }
+            val parsed = RosterParser.parse(rawText, gradeClass)
+            val result = repository.importStudents(parsed.students)
+            val skippedCount = parsed.skipped.size
+
+            val message = if (result.isSuccess) {
+                val added = result.getOrDefault(0)
+                buildString {
+                    append("Imported $added student(s).")
+                    if (skippedCount > 0) append(" Skipped $skippedCount row(s) with no valid phone.")
+                }
+            } else {
+                "Import failed: ${result.exceptionOrNull()?.localizedMessage}"
+            }
+
+            _schoolSettings.update {
+                it.copy(isSaving = false, statusBannerMessage = message)
+            }
+        }
     }
 
     fun seedSampleRoster() {
