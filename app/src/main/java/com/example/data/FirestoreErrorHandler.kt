@@ -1,8 +1,6 @@
 package com.example.data
 
 import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,46 +14,30 @@ enum class OperationType(val value: String) {
     WRITE("write"),
 }
 
+/**
+ * Formats an error for logging. Retained for API compatibility with the
+ * original Firestore-backed repository; the auth-specific payload is gone
+ * because the app no longer uses Firebase Auth.
+ */
 fun handleFirestoreError(
     exception: Throwable,
     operationType: OperationType,
     path: String?
 ): String {
     val causes = generateSequence(exception) { it.cause }
-    val rootError = causes.firstOrNull { it is FirebaseFirestoreException }
-        ?: causes.firstOrNull { it !is CancellationException }
-        ?: exception
-
-    val auth = try {
-        FirebaseAuth.getInstance()
-    } catch (e: Exception) {
-        null
-    }
-    val currentUser = auth?.currentUser
-
-    val providerInfoList = currentUser?.providerData?.map { provider ->
-        JSONObject().apply {
-            put("providerId", provider.providerId)
-            put("email", provider.email)
-        }
-    } ?: emptyList()
-
-    val authInfoJson = JSONObject().apply {
-        put("userId", currentUser?.uid)
-        put("email", currentUser?.email)
-        put("emailVerified", currentUser?.isEmailVerified)
-        put("tenantId", currentUser?.tenantId)
-        put("providerInfo", JSONArray(providerInfoList))
-    }
+    val rootError = causes.firstOrNull { it !is CancellationException } ?: exception
 
     val errorInfoJson = JSONObject().apply {
         put("error", rootError.message ?: rootError.toString())
         put("operationType", operationType.value)
         put("path", path)
-        put("authInfo", authInfoJson)
+        put("authInfo", JSONObject().apply {
+            put("userId", null)
+            put("mode", "local-device")
+        })
     }
 
     val jsonString = errorInfoJson.toString()
-    Log.e("FirestoreError", "Firestore Error: $jsonString")
+    Log.e("GradePulseError", "Storage Error: $jsonString")
     return jsonString
 }

@@ -1,13 +1,9 @@
 package com.example.data.model
 
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.IgnoreExtraProperties
-import com.google.firebase.firestore.ServerTimestamp
-
-@IgnoreExtraProperties
+// Local-first models. Timestamps are epoch millis so the app can persist
+// offline via SharedPreferences without any Google/Firebase dependency.
 data class Student(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val fullName: String = "",
     val studentCode: String = "",
@@ -16,8 +12,8 @@ data class Student(
     val parentWhatsApp: String = "",
     val attendanceDays: Long = 0L,
     val totalTermDays: Long = 65L,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L
 ) {
     val attendancePercentage: Int
         get() = if (totalTermDays > 0) ((attendanceDays * 100L) / totalTermDays).toInt().coerceIn(0, 100) else 0
@@ -26,9 +22,8 @@ data class Student(
         get() = "$attendanceDays / $totalTermDays Days ($attendancePercentage%)"
 }
 
-@IgnoreExtraProperties
 data class ReportCard(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val studentId: String = "",
     val studentName: String = "",
@@ -48,16 +43,15 @@ data class ReportCard(
     val whatsappStatus: String = "pending",
     val dispatchCount: Long = 0L,
     val lastSentAt: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L
 ) {
     val parsedSubjects: List<SubjectGradeRow>
         get() = parseSubjectsSummary(subjectsSummary)
 }
 
-@IgnoreExtraProperties
 data class ChatMessage(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val threadKey: String = "",
     val studentId: String = "",
@@ -71,8 +65,8 @@ data class ChatMessage(
     val attachmentMimeType: String = "",
     val deliveryStatus: String = "sent",
     val sentTimeLabel: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L
 )
 
 data class ChatThread(

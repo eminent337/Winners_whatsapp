@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.example.R
 import com.example.data.OperationType
 import com.example.data.handleFirestoreError
@@ -11,133 +12,174 @@ import com.example.data.model.SubjectGradeRow
 import com.example.data.model.calculateLetterGrade
 import com.example.data.model.encodeSubjectsSummary
 import com.example.data.model.normalizeThreadKey
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
-class GradePulseRepository(
-    private val db: FirebaseFirestore,
-    private val auth: FirebaseAuth = Firebase.auth
+/**
+ * Local-first data layer.
+ *
+ * Replaces the original Cloud Firestore implementation so the app runs with no
+ * Google account, no Firebase project and no network connection. Data lives in
+ * [SharedPreferences] as JSON, keyed per user profile, and is exposed through
+ * [MutableStateFlow]s that behave like Firestore snapshot listeners.
+ *
+ * Every public method keeps the exact signature and Result<T> contract of the
+ * previous Firestore-backed repository, so the ViewModel needed no changes.
+ */
+class GradePulseRepository internal constructor(
+    context: Context,
+    private val profileUserId: String
 ) {
-    constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(
-            context.applicationContext.getString(R.string.firestore_database_id)
-        ),
-        Firebase.auth
-    )
 
-    private fun requireUserId(): String {
-        return auth.currentUser?.uid
-            ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
+    companion object {
+        private const val PREFS_NAME = "gradepulse_local_store"
+        private const val KEY_STUDENTS = "students_json"
+        private const val KEY_REPORTS = "report_cards_json"
+        private const val KEY_CHAT = "chat_messages_json"
+        private const val LOCAL_USER = "local_user"
+
+        /** Local profiles available for sign-in, persisted on first run. */
+        fun localProfiles(context: Context): List<LocalProfile> {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val raw = prefs.getStringSet("profiles_raw", null) ?: run {
+                val seeded = linkedSetOf(LOCAL_USER)
+                prefs.edit().putStringSet("profiles_raw", seeded).apply()
+                seeded
+            }
+            return raw.map { id ->
+                LocalProfile(id = id, displayName = "This Device")
+            }
+        }
     }
 
-    fun observeStudents(): Flow<List<Student>> = flow {
-        val uid = requireUserId()
-        val path = "users/$uid/students"
-        emitAll(
-            db.collection("users").document(uid).collection("students")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        Student::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedBy { it.fullName.lowercase() }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == uid) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+    /** A lightweight stand-in for a signed-in Firebase user. */
+    data class LocalProfile(val id: String, val displayName: String)
+
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val studentsFlow = MutableStateFlow(readStudents())
+    private val reportsFlow = MutableStateFlow(readReports())
+    private val chatFlow = MutableStateFlow(readChat())
+
+    private fun readStudents(): List<Student> = decodeList(KEY_STUDENTS) { o -> Student(
+        id = o.optString("id"), userId = o.optString("userId"), fullName = o.optString("fullName"),
+        studentCode = o.optString("studentCode"), gradeClass = o.optString("gradeClass"),
+        parentName = o.optString("parentName"), parentWhatsApp = o.optString("parentWhatsApp"),
+        attendanceDays = o.optLong("attendanceDays"), totalTermDays = o.optLong("totalTermDays", 65L),
+        createdAt = o.optLong("createdAt"), updatedAt = o.optLong("updatedAt")
+    ) }
+
+    private fun readReports(): List<ReportCard> = decodeList(KEY_REPORTS) { o -> ReportCard(
+        id = o.optString("id"), userId = o.optString("userId"), studentId = o.optString("studentId"),
+        studentName = o.optString("studentName"), studentCode = o.optString("studentCode"),
+        gradeClass = o.optString("gradeClass"), parentName = o.optString("parentName"),
+        parentWhatsApp = o.optString("parentWhatsApp"), schoolName = o.optString("schoolName"),
+        academicTerm = o.optString("academicTerm"), attendanceSummary = o.optString("attendanceSummary"),
+        subjectsSummary = o.optString("subjectsSummary"), overallScore = o.optLong("overallScore"),
+        overallGrade = o.optString("overallGrade"), classPosition = o.optString("classPosition"),
+        teacherRemarks = o.optString("teacherRemarks"), principalSignature = o.optString("principalSignature"),
+        whatsappStatus = o.optString("whatsappStatus", "pending"), dispatchCount = o.optLong("dispatchCount"),
+        lastSentAt = o.optString("lastSentAt"), createdAt = o.optLong("createdAt"),
+        updatedAt = o.optLong("updatedAt")
+    ) }
+
+    private fun readChat(): List<ChatMessage> = decodeList(KEY_CHAT) { o -> ChatMessage(
+        id = o.optString("id"), userId = o.optString("userId"), threadKey = o.optString("threadKey"),
+        studentId = o.optString("studentId"), studentName = o.optString("studentName"),
+        parentName = o.optString("parentName"), parentWhatsApp = o.optString("parentWhatsApp"),
+        direction = o.optString("direction", "outgoing"), messageText = o.optString("messageText"),
+        attachmentFileId = o.optString("attachmentFileId"), attachmentFileName = o.optString("attachmentFileName"),
+        attachmentMimeType = o.optString("attachmentMimeType"), deliveryStatus = o.optString("deliveryStatus", "sent"),
+        sentTimeLabel = o.optString("sentTimeLabel"), createdAt = o.optLong("createdAt"),
+        updatedAt = o.optLong("updatedAt")
+    ) }
+
+    private inline fun <T> decodeList(key: String, crossinline map: (JSONObject) -> T): List<T> {
+        val raw = prefs.getString(key, null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { map(arr.getJSONObject(it)) }
+        }.getOrElse { emptyList() }
     }
 
-    fun observeReportCards(): Flow<List<ReportCard>> = flow {
-        val uid = requireUserId()
-        val path = "users/$uid/report_cards"
-        emitAll(
-            db.collection("users").document(uid).collection("report_cards")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        ReportCard::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedByDescending { it.updatedAt?.seconds ?: it.createdAt?.seconds ?: 0L }
+    private fun encodeList(key: String, items: List<Any>) {
+        val arr = JSONArray()
+        items.forEach { item ->
+            arr.put(when (item) {
+                is Student -> JSONObject().apply {
+                    put("id", item.id); put("userId", item.userId); put("fullName", item.fullName)
+                    put("studentCode", item.studentCode); put("gradeClass", item.gradeClass)
+                    put("parentName", item.parentName); put("parentWhatsApp", item.parentWhatsApp)
+                    put("attendanceDays", item.attendanceDays); put("totalTermDays", item.totalTermDays)
+                    put("createdAt", item.createdAt); put("updatedAt", item.updatedAt)
                 }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == uid) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
+                is ReportCard -> JSONObject().apply {
+                    put("id", item.id); put("userId", item.userId); put("studentId", item.studentId)
+                    put("studentName", item.studentName); put("studentCode", item.studentCode)
+                    put("gradeClass", item.gradeClass); put("parentName", item.parentName)
+                    put("parentWhatsApp", item.parentWhatsApp); put("schoolName", item.schoolName)
+                    put("academicTerm", item.academicTerm); put("attendanceSummary", item.attendanceSummary)
+                    put("subjectsSummary", item.subjectsSummary); put("overallScore", item.overallScore)
+                    put("overallGrade", item.overallGrade); put("classPosition", item.classPosition)
+                    put("teacherRemarks", item.teacherRemarks); put("principalSignature", item.principalSignature)
+                    put("whatsappStatus", item.whatsappStatus); put("dispatchCount", item.dispatchCount)
+                    put("lastSentAt", item.lastSentAt); put("createdAt", item.createdAt)
+                    put("updatedAt", item.updatedAt)
                 }
-        )
+                is ChatMessage -> JSONObject().apply {
+                    put("id", item.id); put("userId", item.userId); put("threadKey", item.threadKey)
+                    put("studentId", item.studentId); put("studentName", item.studentName)
+                    put("parentName", item.parentName); put("parentWhatsApp", item.parentWhatsApp)
+                    put("direction", item.direction); put("messageText", item.messageText)
+                    put("attachmentFileId", item.attachmentFileId); put("attachmentFileName", item.attachmentFileName)
+                    put("attachmentMimeType", item.attachmentMimeType)
+                    put("deliveryStatus", item.deliveryStatus); put("sentTimeLabel", item.sentTimeLabel)
+                    put("createdAt", item.createdAt); put("updatedAt", item.updatedAt)
+                }
+                else -> JSONObject()
+            })
+        }
+        prefs.edit().putString(key, arr.toString()).apply()
     }
+
+    private fun requireUserId(): String = profileUserId
+
+    private fun persistStudents() { encodeList(KEY_STUDENTS, studentsFlow.value) }
+    private fun persistReports() { encodeList(KEY_REPORTS, reportsFlow.value) }
+    private fun persistChat() { encodeList(KEY_CHAT, chatFlow.value) }
+
+    fun observeStudents(): Flow<List<Student>> = studentsFlow.asStateFlow()
+        .map { list -> list.sortedBy { it.fullName.lowercase() } }
+
+    fun observeReportCards(): Flow<List<ReportCard>> = reportsFlow.asStateFlow()
+        .map { list -> list.sortedByDescending { it.updatedAt.coerceAtLeast(it.createdAt) } }
+
+    fun observeChatMessages(): Flow<List<ChatMessage>> = chatFlow.asStateFlow()
+        .map { list -> list.sortedBy { it.createdAt } }
 
     suspend fun getStudents(): Result<List<Student>> = runCatching {
-        val uid = requireUserId()
-        val path = "users/$uid/students"
-        try {
-            val snapshot = db.collection("users").document(uid).collection("students").get().await()
-            snapshot.toObjects(Student::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.LIST, path)
-            throw e
-        }
+        withContext(Dispatchers.IO) { observeStudents().first() }
     }
 
     suspend fun getReportCards(): Result<List<ReportCard>> = runCatching {
-        val uid = requireUserId()
-        val path = "users/$uid/report_cards"
-        try {
-            val snapshot = db.collection("users").document(uid).collection("report_cards").get().await()
-            snapshot.toObjects(ReportCard::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.LIST, path)
-            throw e
-        }
+        withContext(Dispatchers.IO) { observeReportCards().first() }
     }
 
     suspend fun getReportCardById(ownerUserId: String, reportId: String): Result<ReportCard?> = runCatching {
-        val docRef = db.collection("users").document(ownerUserId)
-            .collection("report_cards").document(reportId)
-        try {
-            val snapshot = docRef.get().await()
-            snapshot.toObject(ReportCard::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.GET, docRef.path)
-            throw e
-        }
+        reportsFlow.value.firstOrNull { it.id == reportId }
     }
 
     suspend fun createStudent(
@@ -150,68 +192,37 @@ class GradePulseRepository(
         totalTermDays: Long
     ): Result<String> = runCatching {
         val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("students").document()
-        val payload = mapOf(
-            "userId" to uid,
-            "fullName" to fullName.trim().take(100),
-            "studentCode" to studentCode.trim().take(40),
-            "gradeClass" to gradeClass.trim().take(50),
-            "parentName" to parentName.trim().take(100),
-            "parentWhatsApp" to parentWhatsApp.trim().take(30),
-            "attendanceDays" to attendanceDays.coerceIn(0L, 366L),
-            "totalTermDays" to totalTermDays.coerceIn(1L, 366L),
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val student = Student(
+            id = id,
+            userId = uid,
+            fullName = fullName.trim().take(100),
+            studentCode = studentCode.trim().take(40),
+            gradeClass = gradeClass.trim().take(50),
+            parentName = parentName.trim().take(100),
+            parentWhatsApp = parentWhatsApp.trim().take(30),
+            attendanceDays = attendanceDays.coerceIn(0L, 366L),
+            totalTermDays = totalTermDays.coerceIn(1L, 366L),
+            createdAt = now,
+            updatedAt = now
         )
-        try {
-            docRef.set(payload).await()
-            docRef.id
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, docRef.path)
-            throw e
-        }
+        studentsFlow.value = studentsFlow.value + student
+        persistStudents()
+        id
     }
 
     suspend fun updateStudent(student: Student): Result<Unit> = runCatching {
-        val uid = requireUserId()
         require(student.id.isNotBlank()) { "Student ID must not be blank for update" }
-        requireNotNull(student.createdAt) { "Student createdAt must not be null for update" }
-        val docRef = db.collection("users").document(uid).collection("students").document(student.id)
-        try {
-            docRef.set(
-                student.copy(
-                    userId = uid,
-                    fullName = student.fullName.trim().take(100),
-                    studentCode = student.studentCode.trim().take(40),
-                    gradeClass = student.gradeClass.trim().take(50),
-                    parentName = student.parentName.trim().take(100),
-                    parentWhatsApp = student.parentWhatsApp.trim().take(30),
-                    attendanceDays = student.attendanceDays.coerceIn(0L, 366L),
-                    totalTermDays = student.totalTermDays.coerceIn(1L, 366L),
-                    updatedAt = null
-                )
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
+        studentsFlow.value = studentsFlow.value.map {
+            if (it.id == student.id) student.copy(updatedAt = System.currentTimeMillis()) else it
         }
+        persistStudents()
     }
 
     suspend fun deleteStudent(studentId: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("students").document(studentId)
-        try {
-            docRef.delete().await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
-        }
+        studentsFlow.value = studentsFlow.value.filterNot { it.id == studentId }
+        persistStudents()
     }
 
     suspend fun createReportCard(
@@ -224,172 +235,85 @@ class GradePulseRepository(
         principalSignature: String
     ): Result<String> = runCatching {
         val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("report_cards").document()
+        val id = UUID.randomUUID().toString()
         val validRows = subjectRows.filter { it.subjectName.isNotBlank() }
         val avgScore = if (validRows.isNotEmpty()) {
             (validRows.sumOf { it.score.coerceIn(0, 100) } / validRows.size).toLong().coerceIn(0L, 100L)
         } else {
             85L
         }
-        val overallGrade = calculateLetterGrade(avgScore.toInt())
-        val encodedSubjects = encodeSubjectsSummary(validRows)
-
-        val payload = mapOf(
-            "userId" to uid,
-            "studentId" to student.id.ifBlank { "stu_manual" }.take(128),
-            "studentName" to student.fullName.trim().take(100),
-            "studentCode" to student.studentCode.trim().take(40),
-            "gradeClass" to student.gradeClass.trim().take(50),
-            "parentName" to student.parentName.trim().take(100),
-            "parentWhatsApp" to student.parentWhatsApp.trim().take(30),
-            "schoolName" to schoolName.trim().ifBlank { "Winners Family School" }.take(120),
-            "academicTerm" to academicTerm.trim().ifBlank { "Term 1 • 2026/2027" }.take(60),
-            "attendanceSummary" to student.formattedAttendance.take(40),
-            "subjectsSummary" to encodedSubjects,
-            "overallScore" to avgScore,
-            "overallGrade" to overallGrade.take(10),
-            "classPosition" to classPosition.trim().ifBlank { "Top 10%" }.take(30),
-            "teacherRemarks" to teacherRemarks.trim().ifBlank { "Shows strong commitment to academic growth." }.take(500),
-            "principalSignature" to principalSignature.trim().ifBlank { "Office of the Principal" }.take(100),
-            "whatsappStatus" to "pending",
-            "dispatchCount" to 0L,
-            "lastSentAt" to "",
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val now = System.currentTimeMillis()
+        val report = ReportCard(
+            id = id,
+            userId = uid,
+            studentId = student.id.ifBlank { "stu_manual" }.take(128),
+            studentName = student.fullName.trim().take(100),
+            studentCode = student.studentCode.trim().take(40),
+            gradeClass = student.gradeClass.trim().take(50),
+            parentName = student.parentName.trim().take(100),
+            parentWhatsApp = student.parentWhatsApp.trim().take(30),
+            schoolName = schoolName.trim().ifBlank { "Winners Family School" }.take(120),
+            academicTerm = academicTerm.trim().ifBlank { "Term 1 • 2026/2027" }.take(60),
+            attendanceSummary = student.formattedAttendance.take(40),
+            subjectsSummary = encodeSubjectsSummary(validRows),
+            overallScore = avgScore,
+            overallGrade = calculateLetterGrade(avgScore.toInt()).take(10),
+            classPosition = classPosition.trim().ifBlank { "Top 10%" }.take(30),
+            teacherRemarks = teacherRemarks.trim().ifBlank { "Shows strong commitment to academic growth." }.take(500),
+            principalSignature = principalSignature.trim().ifBlank { "Office of the Principal" }.take(100),
+            whatsappStatus = "pending",
+            dispatchCount = 0L,
+            lastSentAt = "",
+            createdAt = now,
+            updatedAt = now
         )
-        try {
-            docRef.set(payload).await()
-            docRef.id
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, docRef.path)
-            throw e
-        }
+        reportsFlow.value = reportsFlow.value + report
+        persistReports()
+        id
     }
 
-    suspend fun markReportCardSent(
-        reportCard: ReportCard,
-        status: String = "sent"
-    ): Result<Unit> = runCatching {
-        val uid = requireUserId()
+    suspend fun markReportCardSent(reportCard: ReportCard, status: String = "sent"): Result<Unit> = runCatching {
         require(reportCard.id.isNotBlank()) { "ReportCard ID must not be blank" }
-        val docRef = db.collection("users").document(uid)
-            .collection("report_cards").document(reportCard.id)
         val formattedTime = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US).format(Date())
         val nextCount = (reportCard.dispatchCount + 1L).coerceAtMost(1000L)
         val safeStatus = if (status in listOf("pending", "sent", "reminded")) status else "sent"
-        try {
-            docRef.update(
-                mapOf(
-                    "whatsappStatus" to safeStatus,
-                    "dispatchCount" to nextCount,
-                    "lastSentAt" to formattedTime.take(60),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
-            throw e
+        reportsFlow.value = reportsFlow.value.map {
+            if (it.id == reportCard.id) it.copy(
+                whatsappStatus = safeStatus,
+                dispatchCount = nextCount,
+                lastSentAt = formattedTime.take(60),
+                updatedAt = System.currentTimeMillis()
+            ) else it
         }
+        persistReports()
     }
 
     suspend fun deleteReportCard(reportId: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("report_cards").document(reportId)
-        try {
-            docRef.delete().await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
-        }
+        reportsFlow.value = reportsFlow.value.filterNot { it.id == reportId }
+        persistReports()
     }
 
     suspend fun seedSampleSchoolData(): Result<Unit> = runCatching {
+        if (studentsFlow.value.isNotEmpty()) return@runCatching
+
         val uid = requireUserId()
-        val studentsCol = db.collection("users").document(uid).collection("students")
-        val reportsCol = db.collection("users").document(uid).collection("report_cards")
-        val existingStudents = studentsCol.limit(1).get().await()
-        if (!existingStudents.isEmpty) return@runCatching
-
-        val batch = db.batch()
-        val s1Ref = studentsCol.document()
-        val s2Ref = studentsCol.document()
-        val s3Ref = studentsCol.document()
-        val s4Ref = studentsCol.document()
-
+        val now = System.currentTimeMillis()
         val sampleStudents = listOf(
-            s1Ref to Student(
-                id = s1Ref.id,
-                userId = uid,
-                fullName = "Kwame Mensah",
-                studentCode = "GP-2026-101",
-                gradeClass = "Grade 8 • Emerald",
-                parentName = "Mrs. Abena Mensah",
-                parentWhatsApp = "+233244112233",
-                attendanceDays = 63L,
-                totalTermDays = 65L
-            ),
-            s2Ref to Student(
-                id = s2Ref.id,
-                userId = uid,
-                fullName = "Ama Osei-Bonsu",
-                studentCode = "GP-2026-102",
-                gradeClass = "Grade 8 • Emerald",
-                parentName = "Mr. Kofi Osei-Bonsu",
-                parentWhatsApp = "+233208998877",
-                attendanceDays = 65L,
-                totalTermDays = 65L
-            ),
-            s3Ref to Student(
-                id = s3Ref.id,
-                userId = uid,
-                fullName = "Nana Yaw Boateng",
-                studentCode = "GP-2026-103",
-                gradeClass = "Grade 9 • Gold",
-                parentName = "Dr. Akosua Boateng",
-                parentWhatsApp = "+233547654321",
-                attendanceDays = 60L,
-                totalTermDays = 65L
-            ),
-            s4Ref to Student(
-                id = s4Ref.id,
-                userId = uid,
-                fullName = "Efua Asante",
-                studentCode = "GP-2026-104",
-                gradeClass = "Grade 9 • Gold",
-                parentName = "Mr. Yaw Asante",
-                parentWhatsApp = "+233276123987",
-                attendanceDays = 64L,
-                totalTermDays = 65L
-            )
+            Student(UUID.randomUUID().toString(), uid, "Kwame Mensah", "GP-2026-101",
+                "Grade 8 • Emerald", "Mrs. Abena Mensah", "+233244112233", 63L, 65L, now, now),
+            Student(UUID.randomUUID().toString(), uid, "Ama Osei-Bonsu", "GP-2026-102",
+                "Grade 8 • Emerald", "Mr. Kofi Osei-Bonsu", "+233208998877", 65L, 65L, now, now),
+            Student(UUID.randomUUID().toString(), uid, "Nana Yaw Boateng", "GP-2026-103",
+                "Grade 9 • Gold", "Dr. Akosua Boateng", "+233547654321", 60L, 65L, now, now),
+            Student(UUID.randomUUID().toString(), uid, "Efua Asante", "GP-2026-104",
+                "Grade 9 • Gold", "Mr. Yaw Asante", "+233276123987", 64L, 65L, now, now)
         )
+        studentsFlow.value = sampleStudents
+        persistStudents()
 
-        for ((ref, stu) in sampleStudents) {
-            batch.set(
-                ref,
-                mapOf(
-                    "userId" to uid,
-                    "fullName" to stu.fullName,
-                    "studentCode" to stu.studentCode,
-                    "gradeClass" to stu.gradeClass,
-                    "parentName" to stu.parentName,
-                    "parentWhatsApp" to stu.parentWhatsApp,
-                    "attendanceDays" to stu.attendanceDays,
-                    "totalTermDays" to stu.totalTermDays,
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            )
-        }
-
+        val sentTimestamp = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US).format(Date())
         val sampleReports = listOf(
-            Triple(
-                sampleStudents[0].second,
+            Triple(sampleStudents[0],
                 listOf(
                     SubjectGradeRow("Mathematics", 94, "A+", "Exceptional problem solver"),
                     SubjectGradeRow("Integrated Science", 89, "A", "Strong laboratory inquiry"),
@@ -399,8 +323,7 @@ class GradePulseRepository(
                 ),
                 Triple("1st of 28", "Kwame demonstrates exemplary leadership, curiosity, and academic discipline across all subjects.", "pending" to 0L)
             ),
-            Triple(
-                sampleStudents[1].second,
+            Triple(sampleStudents[1],
                 listOf(
                     SubjectGradeRow("Mathematics", 88, "A", "Consistent accuracy"),
                     SubjectGradeRow("Integrated Science", 92, "A+", "Outstanding research project"),
@@ -410,8 +333,7 @@ class GradePulseRepository(
                 ),
                 Triple("2nd of 28", "Ama had 100% attendance this term and continues to inspire her peers with her communication skills.", "pending" to 0L)
             ),
-            Triple(
-                sampleStudents[2].second,
+            Triple(sampleStudents[2],
                 listOf(
                     SubjectGradeRow("Mathematics", 78, "B+", "Good progress in algebra"),
                     SubjectGradeRow("Integrated Science", 82, "A", "Active in practicals"),
@@ -423,82 +345,53 @@ class GradePulseRepository(
             )
         )
 
-        val sentTimestamp = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US).format(Date())
-        for ((stu, rows, meta) in sampleReports) {
+        val built = sampleReports.map { (stu, rows, meta) ->
             val (position, remarks, statusPair) = meta
             val (status, count) = statusPair
             val avgScore = (rows.sumOf { it.score } / rows.size).toLong()
-            val repRef = reportsCol.document()
-            batch.set(
-                repRef,
-                mapOf(
-                    "userId" to uid,
-                    "studentId" to stu.id,
-                    "studentName" to stu.fullName,
-                    "studentCode" to stu.studentCode,
-                    "gradeClass" to stu.gradeClass,
-                    "parentName" to stu.parentName,
-                    "parentWhatsApp" to stu.parentWhatsApp,
-                    "schoolName" to "Winners Family School",
-                    "academicTerm" to "Term 1 • 2026/2027",
-                    "attendanceSummary" to stu.formattedAttendance,
-                    "subjectsSummary" to encodeSubjectsSummary(rows),
-                    "overallScore" to avgScore,
-                    "overallGrade" to calculateLetterGrade(avgScore.toInt()),
-                    "classPosition" to position,
-                    "teacherRemarks" to remarks,
-                    "principalSignature" to "Smith Sampson, Principal",
-                    "whatsappStatus" to status,
-                    "dispatchCount" to count,
-                    "lastSentAt" to if (status == "sent") sentTimestamp else "",
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
+            ReportCard(
+                id = UUID.randomUUID().toString(),
+                userId = uid,
+                studentId = stu.id,
+                studentName = stu.fullName,
+                studentCode = stu.studentCode,
+                gradeClass = stu.gradeClass,
+                parentName = stu.parentName,
+                parentWhatsApp = stu.parentWhatsApp,
+                schoolName = "Winners Family School",
+                academicTerm = "Term 1 • 2026/2027",
+                attendanceSummary = stu.formattedAttendance,
+                subjectsSummary = encodeSubjectsSummary(rows),
+                overallScore = avgScore,
+                overallGrade = calculateLetterGrade(avgScore.toInt()),
+                classPosition = position,
+                teacherRemarks = remarks,
+                principalSignature = "Smith Sampson, Principal",
+                whatsappStatus = status,
+                dispatchCount = count,
+                lastSentAt = if (status == "sent") sentTimestamp else "",
+                createdAt = now,
+                updatedAt = now
             )
         }
-
-        try {
-            batch.commit().await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, reportsCol.path)
-            throw e
-        }
+        reportsFlow.value = built
+        persistReports()
     }
 
     suspend fun migrateDefaultSchoolNameIfNeeded(): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val reportsCol = db.collection("users").document(uid).collection("report_cards")
-        val legacySchoolSnap = reportsCol
-            .whereEqualTo("schoolName", "Royal Crest International School")
-            .get()
-            .await()
-        val legacyPrincipalSnap = reportsCol
-            .whereEqualTo("principalSignature", "Dr. E. Amedzro, Principal")
-            .get()
-            .await()
-
-        val updatesById = linkedMapOf<String, Pair<com.google.firebase.firestore.DocumentReference, MutableMap<String, Any>>>()
-        for (doc in legacySchoolSnap.documents) {
-            val map = updatesById.getOrPut(doc.id) {
-                doc.reference to mutableMapOf("updatedAt" to FieldValue.serverTimestamp())
-            }.second
-            map["schoolName"] = "Winners Family School"
+        val updated = reportsFlow.value.map { report ->
+            if (report.schoolName == "Royal Crest International School") {
+                report.copy(schoolName = "Winners Family School", updatedAt = System.currentTimeMillis())
+            } else if (report.principalSignature == "Dr. E. Amedzro, Principal") {
+                report.copy(principalSignature = "Smith Sampson, Principal", updatedAt = System.currentTimeMillis())
+            } else {
+                report
+            }
         }
-        for (doc in legacyPrincipalSnap.documents) {
-            val map = updatesById.getOrPut(doc.id) {
-                doc.reference to mutableMapOf("updatedAt" to FieldValue.serverTimestamp())
-            }.second
-            map["principalSignature"] = "Smith Sampson, Principal"
+        if (updated != reportsFlow.value) {
+            reportsFlow.value = updated
+            persistReports()
         }
-
-        if (updatesById.isEmpty()) return@runCatching
-        val batch = db.batch()
-        for ((ref, fields) in updatesById.values) {
-            batch.update(ref, fields)
-        }
-        batch.commit().await()
     }
 
     suspend fun updateSchoolBrandingOnReportCards(
@@ -506,52 +399,19 @@ class GradePulseRepository(
         academicTerm: String,
         principalSignature: String
     ): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val reportsCol = db.collection("users").document(uid).collection("report_cards")
-        val snap = reportsCol.get().await()
-        if (snap.isEmpty) return@runCatching
+        if (reportsFlow.value.isEmpty()) return@runCatching
         val safeSchool = schoolName.trim().ifBlank { "Winners Family School" }.take(120)
         val safeTerm = academicTerm.trim().ifBlank { "Term 1 • 2026/2027" }.take(60)
         val safeSig = principalSignature.trim().ifBlank { "Office of the Principal" }.take(100)
-        val batch = db.batch()
-        for (doc in snap.documents) {
-            batch.update(
-                doc.reference,
-                mapOf(
-                    "schoolName" to safeSchool,
-                    "academicTerm" to safeTerm,
-                    "principalSignature" to safeSig,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
+        reportsFlow.value = reportsFlow.value.map {
+            it.copy(
+                schoolName = safeSchool,
+                academicTerm = safeTerm,
+                principalSignature = safeSig,
+                updatedAt = System.currentTimeMillis()
             )
         }
-        batch.commit().await()
-    }
-
-    fun observeChatMessages(): Flow<List<ChatMessage>> = flow {
-        val uid = requireUserId()
-        val path = "users/$uid/chat_messages"
-        emitAll(
-            db.collection("users").document(uid).collection("chat_messages")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        ChatMessage::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedBy { it.createdAt?.toDate()?.time ?: 0L }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == uid) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+        persistReports()
     }
 
     suspend fun logChatMessage(
@@ -568,63 +428,48 @@ class GradePulseRepository(
         deliveryStatus: String = if (direction == "incoming") "received" else "sent"
     ): Result<String> = runCatching {
         val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("chat_messages").document()
+        val id = UUID.randomUUID().toString()
         val safePhone = parentWhatsApp.trim().ifBlank { "+2330000000" }.take(30)
         val safeThread = threadKey.trim().ifBlank { normalizeThreadKey(safePhone, studentId) }.take(60)
         val safeDirection = if (direction in listOf("outgoing", "incoming")) direction else "outgoing"
         val safeStatus = if (deliveryStatus in listOf("sent", "delivered", "received")) deliveryStatus else "sent"
         val timeLabel = SimpleDateFormat("MMM d • h:mm a", Locale.US).format(Date()).take(60)
+        val now = System.currentTimeMillis()
 
-        val payload = mapOf(
-            "userId" to uid,
-            "threadKey" to safeThread,
-            "studentId" to studentId.trim().take(128),
-            "studentName" to studentName.trim().ifBlank { "Student" }.take(100),
-            "parentName" to parentName.trim().ifBlank { "Parent / Guardian" }.take(100),
-            "parentWhatsApp" to safePhone,
-            "direction" to safeDirection,
-            "messageText" to messageText.trim().ifBlank { "Report card dispatched" }.take(1500),
-            "attachmentFileId" to attachmentFileId.trim().take(128),
-            "attachmentFileName" to attachmentFileName.trim().take(140),
-            "attachmentMimeType" to attachmentMimeType.trim().take(60),
-            "deliveryStatus" to safeStatus,
-            "sentTimeLabel" to timeLabel,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp()
+        val message = ChatMessage(
+            id = id,
+            userId = uid,
+            threadKey = safeThread,
+            studentId = studentId.trim().take(128),
+            studentName = studentName.trim().ifBlank { "Student" }.take(100),
+            parentName = parentName.trim().ifBlank { "Parent / Guardian" }.take(100),
+            parentWhatsApp = safePhone,
+            direction = safeDirection,
+            messageText = messageText.trim().ifBlank { "Report card dispatched" }.take(1500),
+            attachmentFileId = attachmentFileId.trim().take(128),
+            attachmentFileName = attachmentFileName.trim().take(140),
+            attachmentMimeType = attachmentMimeType.trim().take(60),
+            deliveryStatus = safeStatus,
+            sentTimeLabel = timeLabel,
+            createdAt = now,
+            updatedAt = now
         )
-        try {
-            docRef.set(payload).await()
-            docRef.id
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, docRef.path)
-            throw e
-        }
+        chatFlow.value = chatFlow.value + message
+        persistChat()
+        id
     }
 
     suspend fun deleteChatMessage(messageId: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val docRef = db.collection("users").document(uid).collection("chat_messages").document(messageId)
-        try {
-            docRef.delete().await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docRef.path)
-            throw e
-        }
+        chatFlow.value = chatFlow.value.filterNot { it.id == messageId }
+        persistChat()
     }
 
     suspend fun deleteChatThread(threadKey: String): Result<Unit> = runCatching {
-        val uid = requireUserId()
-        val col = db.collection("users").document(uid).collection("chat_messages")
-        val snap = col.whereEqualTo("threadKey", threadKey).get().await()
-        if (snap.isEmpty) return@runCatching
-        val batch = db.batch()
-        for (doc in snap.documents) {
-            batch.delete(doc.reference)
-        }
-        batch.commit().await()
+        chatFlow.value = chatFlow.value.filterNot { it.threadKey == threadKey }
+        persistChat()
     }
 }
+
+/** Consumed by [GradePulseViewModel.provideFactory]; kept for API compatibility. */
+fun gradePulseRepository(context: Context, userId: String): GradePulseRepository =
+    GradePulseRepository(context, userId)

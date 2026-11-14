@@ -21,8 +21,7 @@ import com.example.data.repository.GradePulseRepository
 import com.example.data.repository.UploadedFolderRepository
 import com.example.service.WhatsAppDispatchResult
 import com.example.service.WhatsAppDispatchService
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
+import com.example.data.repository.gradePulseRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,11 +70,10 @@ class GradePulseViewModel(
         }
         .map<List<Student>, UiState<List<Student>>> { UiState.Success(it) }
         .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
+            if (error is CancellationException) throw error
+            val rootError = generateSequence(error) { it.cause }
+                .filterIsInstance<Exception>()
+                .firstOrNull() ?: error
             Log.w(TAG, "Error observing students", rootError)
             emit(UiState.Error(rootError.message ?: "Failed to load students"))
         }
@@ -107,11 +105,10 @@ class GradePulseViewModel(
             UiState.Success(list)
         }
         .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
+            if (error is CancellationException) throw error
+            val rootError = generateSequence(error) { it.cause }
+                .filterIsInstance<Exception>()
+                .firstOrNull() ?: error
             Log.w(TAG, "Error observing report cards", rootError)
             emit(UiState.Error(rootError.message ?: "Failed to load report cards"))
         }
@@ -124,11 +121,10 @@ class GradePulseViewModel(
     val chatMessagesState: StateFlow<UiState<List<ChatMessage>>> = repository.observeChatMessages()
         .map<List<ChatMessage>, UiState<List<ChatMessage>>> { UiState.Success(it) }
         .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
+            if (error is CancellationException) throw error
+            val rootError = generateSequence(error) { it.cause }
+                .filterIsInstance<Exception>()
+                .firstOrNull() ?: error
             Log.w(TAG, "Error observing chat messages", rootError)
             emit(UiState.Error(rootError.message ?: "Failed to load chat history"))
         }
@@ -164,7 +160,7 @@ class GradePulseViewModel(
                 lastDirection = latest.direction,
                 lastDeliveryStatus = latest.deliveryStatus,
                 messageCount = msgs.size,
-                lastTimestampSeconds = latest.createdAt?.seconds ?: System.currentTimeMillis() / 1000L
+                lastTimestampSeconds = latest.createdAt.coerceAtLeast(0L)
             )
         }.sortedByDescending { it.lastTimestampSeconds }
     }.stateIn(
@@ -579,10 +575,8 @@ class GradePulseViewModel(
                 val app = checkNotNull(this[APPLICATION_KEY]) {
                     "APPLICATION_KEY missing from CreationExtras"
                 }
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
                 GradePulseViewModel(
-                    repository = GradePulseRepository(db),
+                    repository = gradePulseRepository(app.applicationContext, currentUserId),
                     folderRepository = UploadedFolderRepository(app.applicationContext, currentUserId),
                     currentUserId = currentUserId
                 )

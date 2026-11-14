@@ -1,8 +1,6 @@
 package com.example.auth
 
-import android.app.Activity
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,153 +56,61 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.credentials.ClearCredentialStateRequest
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.auth
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 
-import androidx.compose.runtime.withFrameNanos
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
+/**
+ * Local-only authentication.
+ *
+ * The original implementation signed in with Google via Credential Manager and
+ * Firebase Auth. That required a `google-services.json` file which was never
+ * committed, so `Firebase.auth` threw on startup and the app crashed before the
+ * first frame rendered.
+ *
+ * This replacement has no Google, Firebase or network dependency. A profile is
+ * a plain identifier stored on the device; "signing in" simply selects it.
+ * Data is scoped per profile by [com.example.data.repository.GradePulseRepository].
+ */
 
-internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-    val listener = FirebaseAuth.AuthStateListener { auth ->
-        trySend(auth.currentUser)
-    }
-    addAuthStateListener(listener)
-    awaitClose { removeAuthStateListener(listener) }
+/** A locally stored device profile. Mirrors GradePulseRepository.LocalProfile. */
+typealias LocalProfile = com.example.data.repository.GradePulseRepository.LocalProfile
+
+private val signedInProfile = MutableStateFlow<LocalProfile?>(null)
+
+/**
+ * Emits the currently selected profile, or null when no profile is active.
+ * Replaces the FirebaseAuth.AuthStateListener extension that used to live here.
+ */
+fun authStateFlow(): Flow<LocalProfile?> = signedInProfile.asStateFlow()
+
+val currentProfile: LocalProfile?
+    get() = signedInProfile.value
+
+/**
+ * Creates a profile on first launch if none exists and returns the list of
+ * profiles available on this device.
+ */
+fun availableProfiles(context: Context): List<LocalProfile> =
+    com.example.data.repository.GradePulseRepository.localProfiles(context)
+
+/**
+ * Persists the selected profile. No credential manager, no IPC, no network.
+ */
+fun signIn(context: Context, profile: LocalProfile, onSignedIn: () -> Unit = {}) {
+    val prefs = context.applicationContext
+        .getSharedPreferences("gradepulse_local_store", Context.MODE_PRIVATE)
+    prefs.edit().putString("active_profile_id", profile.id).apply()
+    signedInProfile.value = profile
+    onSignedIn()
 }
 
-fun attemptAutoSignIn(
-    context: Context,
-    credentialManager: CredentialManager,
-    onAuthSuccess: () -> Unit,
-    onUnauthenticated: () -> Unit,
-    scope: CoroutineScope
-) {
-    if (Firebase.auth.currentUser != null) {
-        onAuthSuccess()
-        return
-    }
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (e: Exception) {
-        onUnauthenticated()
-        return
-    }
-
-    val googleIdOption = GetGoogleIdOption.Builder()
-        .setFilterByAuthorizedAccounts(true)
-        .setServerClientId(clientId)
-        .setAutoSelectEnabled(true)
-        .build()
-
-    val request = GetCredentialRequest.Builder()
-        .addCredentialOption(googleIdOption)
-        .build()
-
-    scope.launch {
-        try {
-            val activityContext = context as? Activity ?: context
-            val result = credentialManager.getCredential(activityContext, request)
-            val credential = result.credential
-            if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                Firebase.auth.signInWithCredential(authCredential).await()
-                onAuthSuccess()
-            } else {
-                onUnauthenticated()
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            onUnauthenticated()
-        }
-    }
-}
-
-fun onGoogleSignInClicked(
-    context: Context,
-    credentialManager: CredentialManager,
-    onAuthSuccess: () -> Unit,
-    onAuthError: (String) -> Unit,
-    scope: CoroutineScope,
-    onAuthCancelled: () -> Unit = {}
-) {
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (e: Exception) {
-        onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
-        return
-    }
-
-    val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-    val request = GetCredentialRequest.Builder()
-        .addCredentialOption(signInOption)
-        .build()
-
-    scope.launch {
-        try {
-            val activityContext = context as? Activity ?: context
-            val result = credentialManager.getCredential(activityContext, request)
-            val credential = result.credential
-            if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                Firebase.auth.signInWithCredential(authCredential).await()
-                onAuthSuccess()
-            } else {
-                onAuthError("Unexpected credential type")
-            }
-        } catch (e: GetCredentialCancellationException) {
-            Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
-            onAuthCancelled()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e("Auth", "Google Sign-In failed", e)
-            onAuthError(e.localizedMessage ?: "Sign in failed")
-        }
-    }
-}
-
-fun signOut(
-    credentialManager: CredentialManager,
-    scope: CoroutineScope,
-    onSignOutComplete: () -> Unit = {}
-) {
-    scope.launch {
-        withContext(NonCancellable) {
-            try {
-                credentialManager.clearCredentialState(ClearCredentialStateRequest())
-            } catch (e: Exception) {
-                Log.w("Auth", "Failed to clear credential state: ${e.message}")
-            } finally {
-                Firebase.auth.signOut()
-                onSignOutComplete()
-            }
-        }
-    }
+/** Clears the active profile. Called from the sign-out action. */
+fun signOut(onSignOutComplete: () -> Unit = {}) {
+    signedInProfile.value = null
+    onSignOutComplete()
 }
 
 @Composable
@@ -214,22 +119,13 @@ fun AuthScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        // Wait for initial Activity surface sync and first frame draw to complete
-        // before requesting Credential Manager UI/IPC, preventing SurfaceSyncGroup timeouts.
-        withFrameNanos { }
-        delay(350L)
-        attemptAutoSignIn(
-            context = context,
-            credentialManager = credentialManager,
-            onAuthSuccess = onAuthSuccess,
-            onUnauthenticated = {},
-            scope = scope
-        )
+    val profiles = remember(context) {
+        availableProfiles(context).ifEmpty {
+            listOf(LocalProfile("local_user", "This Device"))
+        }
     }
 
     Surface(
@@ -360,8 +256,8 @@ fun AuthScreen(
                     )
                     FeatureRowItem(
                         icon = Icons.Default.VerifiedUser,
-                        title = "Auto-Matched Parent Contacts",
-                        subtitle = "Links filenames to saved parent WhatsApp numbers & tracks blue ticks"
+                        title = "Works Fully Offline",
+                        subtitle = "Everything is stored on this device — no account or internet required"
                     )
                 }
 
@@ -388,28 +284,23 @@ fun AuthScreen(
                     onClick = {
                         errorMessage = null
                         isLoading = true
-                        onGoogleSignInClicked(
-                            context = context,
-                            credentialManager = credentialManager,
-                            onAuthSuccess = {
+                        scope.launch {
+                            try {
+                                val profile = profiles.first()
+                                signIn(context, profile)
                                 isLoading = false
                                 onAuthSuccess()
-                            },
-                            onAuthError = { err ->
+                            } catch (e: Exception) {
                                 isLoading = false
-                                errorMessage = err
-                            },
-                            scope = scope,
-                            onAuthCancelled = {
-                                isLoading = false
+                                errorMessage = e.localizedMessage ?: "Could not open workspace"
                             }
-                        )
+                        }
                     },
                     enabled = !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .testTag("google_sign_in_button"),
+                        .testTag("local_sign_in_button"),
                     shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.secondary,
@@ -430,6 +321,15 @@ fun AuthScreen(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Runs offline on this device — no Google account needed",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
