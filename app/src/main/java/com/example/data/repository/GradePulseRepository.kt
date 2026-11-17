@@ -318,7 +318,7 @@ class GradePulseRepository internal constructor(
                 fullName = entry.fullName.take(100),
                 studentCode = entry.studentCode.ifBlank { "WFS-${System.currentTimeMillis() % 100000}" }.take(40),
                 gradeClass = entry.gradeClass.ifBlank { "BECE 2027" }.take(50),
-                parentName = "Parent/Guardian",
+                parentName = entry.parentName.ifBlank { "Parent/Guardian" }.take(100),
                 parentWhatsApp = entry.parentWhatsApp,
                 attendanceDays = 65L,
                 totalTermDays = 65L,

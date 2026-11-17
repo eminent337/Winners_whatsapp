@@ -25,6 +25,7 @@ object RosterParser {
 
     data class ParsedStudent(
         val fullName: String,
+        val parentName: String,
         val parentWhatsApp: String,
         val studentCode: String,
         val gradeClass: String
@@ -66,59 +67,105 @@ object RosterParser {
         val students = mutableListOf<ParsedStudent>()
         val skipped = mutableListOf<String>()
 
-        // Detect and drop a header row.
-        val start = lines.indexOfFirst { line ->
+        // Detect and drop the header row, and use it to locate special columns.
+        val headerIndex = lines.indexOfFirst { line ->
             val lower = line.lowercase()
             !line.any { it.isDigit() } &&
                 (lower.contains("surname") || lower.contains("name") || lower.contains("contact") ||
                     lower.contains("phone") || lower.contains("gender"))
-        }.let { if (it >= 0) it + 1 else 0 }
+        }
+        val start = if (headerIndex >= 0) headerIndex + 1 else 0
+
+        val headerCells = if (headerIndex >= 0) {
+            lines[headerIndex].split(Regex("""\t|,|;|\||\s{2,}""")).map { it.trim().lowercase() }
+        } else {
+            emptyList()
+        }
+
+        // Columns to pull out of the student name: the parent/guardian name and
+        // the phone. Detected from the header when present, else inferred per row.
+        val parentNameIdx = headerCells.indexOfFirst { isParentNameHeader(it) }.takeIf { it >= 0 }
+        val phoneIdx = headerCells.indexOfFirst { isContactHeader(it) }.takeIf { it >= 0 }
+        val serialIdx = headerCells.indexOfFirst { c -> c in setOf("s/n", "sn", "no.", "no") }
+            .takeIf { it >= 0 }
 
         for (line in lines.drop(start)) {
-            val cells = line.split('\t', ',', ';', '|')
+            // Split on tabs/commas/semicolons/pipes, or runs of 2+ spaces (space-aligned
+            // columns copied from a document/Excel paste).
+            val cells = line.split(Regex("""\t|,|;|\||\s{2,}"""))
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
 
-            if (cells.isEmpty()) continue
+            if (cells.all { it.isEmpty() }) continue
 
-            // Find a phone number: prefer an explicit cell, else scan the line.
+            // Find the phone: prefer the header's contact column, else any cell that
+            // normalises, else a phone pattern anywhere on the line.
             var phone: String? = null
-            var nameParts = mutableListOf<String>()
-
-            for (cell in cells) {
-                val normalized = normalizeGhanaNumber(cell)
-                if (normalized != null && phone == null) {
-                    phone = normalized
-                } else if (cell.any { it.isLetter() }) {
-                    // Drop generic header/label cells.
-                    val lower = cell.lowercase()
-                    val isLabel = lower in setOf(
-                        "s/n", "sn", "no.", "gender", "male", "female",
-                        "gh. lang. type", "date of birth", "parents contact",
-                        "parent contact", "surname", "first name", "other name"
-                    ) || lower.matches(Regex("""\d{1,2}\s*[-/]\s*\d{1,2}\s*[-/]\s*\d{2,4}"""))
-                    if (!isLabel) nameParts.add(cell)
+            if (phoneIdx != null) {
+                normalizeGhanaNumber(cells.getOrNull(phoneIdx))?.let { phone = it }
+            }
+            if (phone == null) {
+                for (cell in cells) {
+                    val normalized = normalizeGhanaNumber(cell)
+                    if (normalized != null) {
+                        phone = normalized
+                        break
+                    }
                 }
             }
-
+            // Fallback: scan the whole line for a phone pattern (space-aligned pastes
+            // where the number was glued to other text).
+            var phoneMatch: String? = null
             if (phone == null) {
-                val match = phoneRegex.find(line)?.value
-                if (match != null) {
-                    normalizeGhanaNumber(match)?.let { phone = it }
-                    if (phone != null) {
-                        nameParts = line.replace(match, "")
-                            .split('\t', ',', ';', '|')
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() && it.any { c -> c.isLetter() } }
-                            .toMutableList()
+                phoneRegex.find(line)?.let { match ->
+                    normalizeGhanaNumber(match.value)?.let {
+                        phone = it
+                        phoneMatch = match.value
                     }
                 }
             }
 
-            val name = nameParts.joinToString(" ")
+            // The parent/guardian name: the header's parent column, else blank.
+            val parentName = parentNameIdx
+                ?.let { idx -> cells.getOrNull(idx) }
+                ?.takeIf { it.any { c -> c.isLetter() } }
+                ?.replace(Regex("""\s+"""), " ")
+                ?.trim()
+                ?.removePrefix("0")
+                ?.trim()
+                .orEmpty()
+
+            // Student name = every cell that is not the parent, not the phone, not
+            // a serial number / gender / date-of-birth label.
+            val nameParts = cells.withIndex().mapNotNull { (idx, cell) ->
+                if (idx == parentNameIdx) return@mapNotNull null
+                if (idx == phoneIdx) return@mapNotNull null
+                if (idx == serialIdx) return@mapNotNull null
+                if (cell.isBlank()) return@mapNotNull null
+                // Drop a cell that *is* the phone (inferred case).
+                if (normalizeGhanaNumber(cell) != null) return@mapNotNull null
+                if (isStaticLabel(cell)) return@mapNotNull null
+                cell
+            }
+
+            var name = nameParts.joinToString(" ")
                 .replace(Regex("""\s+"""), " ")
                 .trim()
-                .removePrefix("0").trim() // stray leading serial number
+                .removePrefix("0")   // stray serial number
+                .trim()
+
+            // If the phone was glued onto the name (space-aligned fallback), strip it.
+            if (phoneMatch != null) {
+                name = name.replace(phoneMatch!!, "").replace(Regex("""\s+"""), " ").trim()
+            }
+
+            // If the parent name was inferred (no header column) but still ended up
+            // glued onto the student name, strip it out.
+            if (parentName.isNotBlank() && parentNameIdx == null &&
+                name.contains(parentName, ignoreCase = true)
+            ) {
+                name = name.replace(parentName, "").replace(Regex("""\s+"""), " ").trim()
+            }
 
             if (name.isBlank() || name.length < 3) {
                 skipped += line.take(60)
@@ -131,6 +178,7 @@ object RosterParser {
 
             students += ParsedStudent(
                 fullName = name,
+                parentName = parentName.ifBlank { "Parent/Guardian" },
                 parentWhatsApp = phone,
                 studentCode = "",
                 gradeClass = gradeClass
@@ -138,5 +186,27 @@ object RosterParser {
         }
 
         return Result(students, skipped)
+    }
+
+    /** True when a header cell names a parent/guardian column. */
+    private fun isParentNameHeader(cell: String): Boolean {
+        val c = cell.lowercase()
+        return c.contains("parent") || c.contains("guardian")
+    }
+
+    /** True when a header cell names a phone/contact column. */
+    private fun isContactHeader(cell: String): Boolean {
+        val c = cell.lowercase()
+        return c.contains("contact") || c.contains("phone") || c.contains("mobile") ||
+            c.contains("whatsapp") || c.contains("tel")
+    }
+
+    /** Cells that carry no student name and must never join the name. */
+    private fun isStaticLabel(cell: String): Boolean {
+        val lower = cell.lowercase()
+        return lower in setOf(
+            "s/n", "sn", "no.", "no", "gender", "male", "female",
+            "gh. lang. type", "date of birth", "parents contact", "parent contact"
+        ) || lower.matches(Regex("""\d{1,2}\s*[-/]\s*\d{1,2}\s*[-/]\s*\d{2,4}"""))
     }
 }

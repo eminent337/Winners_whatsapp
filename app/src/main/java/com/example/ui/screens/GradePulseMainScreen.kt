@@ -568,8 +568,8 @@ fun GradePulseMainScreen(
                     NavigationBarItem(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Default.Groups, contentDescription = "Parents") },
-                        label = { Text("Parents") },
+                        icon = { Icon(Icons.Default.Groups, contentDescription = "Students") },
+                        label = { Text("Students") },
                         colors = navColors,
                         modifier = Modifier.testTag("nav_tab_students")
                     )
@@ -995,14 +995,22 @@ private fun NeatStudentsDirectoryTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = student.fullName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${student.parentName} • ${student.parentWhatsApp}",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = student.parentName,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = student.parentWhatsApp,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
