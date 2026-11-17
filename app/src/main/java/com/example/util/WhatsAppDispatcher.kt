@@ -183,14 +183,8 @@ object WhatsAppDispatcher {
             files.all { it.isImage } -> "image/*"
             else -> "*/*"
         }
-        val caption = buildString {
-            append("*${schoolName.uppercase()}*\n")
-            append("Official Report Cards (${validPaths.size}) • $academicTerm\n")
-            if (customIntroNote.isNotBlank()) {
-                append("\n${customIntroNote.trim()}\n")
-            }
-            append("\nSigned: $principalSignature")
-        }
+        // No auto-generated message — send only the teacher's own note if provided.
+        val caption = customIntroNote.trim()
 
         val uniqueNumbers = files.mapNotNull {
             WhatsAppSecurityValidator.normalizeE164Digits(it.parentWhatsApp)
