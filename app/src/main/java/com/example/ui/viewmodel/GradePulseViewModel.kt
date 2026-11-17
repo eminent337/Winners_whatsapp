@@ -173,6 +173,7 @@ class GradePulseViewModel(
     init {
         // Automatically seed sample school roster on first launch and migrate legacy placeholder school name
         viewModelScope.launch {
+            repository.migratePlaceholderRosterIfNeeded()
             repository.seedSampleSchoolData()
             repository.migrateDefaultSchoolNameIfNeeded()
         }

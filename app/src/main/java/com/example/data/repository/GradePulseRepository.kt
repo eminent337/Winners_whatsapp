@@ -344,16 +344,66 @@ class GradePulseRepository internal constructor(
 
         val uid = requireUserId()
         val now = System.currentTimeMillis()
-        val sampleStudents = listOf(
-            Student(UUID.randomUUID().toString(), uid, "Kwame Mensah", "GP-2026-101",
-                "Grade 8 • Emerald", "Mrs. Abena Mensah", "+233244112233", 63L, 65L, now, now),
-            Student(UUID.randomUUID().toString(), uid, "Ama Osei-Bonsu", "GP-2026-102",
-                "Grade 8 • Emerald", "Mr. Kofi Osei-Bonsu", "+233208998877", 65L, 65L, now, now),
-            Student(UUID.randomUUID().toString(), uid, "Nana Yaw Boateng", "GP-2026-103",
-                "Grade 9 • Gold", "Dr. Akosua Boateng", "+233547654321", 60L, 65L, now, now),
-            Student(UUID.randomUUID().toString(), uid, "Efua Asante", "GP-2026-104",
-                "Grade 9 • Gold", "Mr. Yaw Asante", "+233276123987", 64L, 65L, now, now)
+        // Real BECE 2027 roster for Winners Family School (41 students).
+        // Students with no parent contact yet keep an empty WhatsApp number.
+        val roster = listOf(
+            Triple("WFS-BECE27-001", "ABRAHAM EZAN NYAMEAYE", "+233248907473"),
+            Triple("WFS-BECE27-002", "ACKON CHRISTIANA NANA AMA NHYIRA OWUSUWAA", "+233531867572"),
+            Triple("WFS-BECE27-003", "ADDEY JOSEPHINE AKUA BABYIE", "+233538604588"),
+            Triple("WFS-BECE27-004", "ADU-BOAHEN DANIEL KWAKU", "+233555288127"),
+            Triple("WFS-BECE27-005", "AFOAKWA KINGSLEY OHENE AKESE", ""),
+            Triple("WFS-BECE27-006", "ADJEI RANSFORD APPIAH", "+233531561451"),
+            Triple("WFS-BECE27-007", "AIDOO KINGSLEY NANA KWEKU", "+233248013336"),
+            Triple("WFS-BECE27-008", "AKUTUSI PRINCESS BRYANA IMORO", "+233244898939"),
+            Triple("WFS-BECE27-009", "AKWADAH MIRACLE PENIEL", "+233544803281"),
+            Triple("WFS-BECE27-010", "AMANBOHWE MCNELLE", "+233591464349"),
+            Triple("WFS-BECE27-011", "AMENUKU QUEEN LORLORNYO", "+233240490005"),
+            Triple("WFS-BECE27-012", "ANANE ANGELA NANA ADJOA", "+233242223245"),
+            Triple("WFS-BECE27-013", "ANIM YESULEEN ANATE", "+233556370307"),
+            Triple("WFS-BECE27-014", "ANKUVIE THEODORE GREAT ANGEL ENYONAM NHYIRA", "+233535135855"),
+            Triple("WFS-BECE27-015", "ANNAN EPHRAIM BOAKYE", "+233242424551"),
+            Triple("WFS-BECE27-016", "AYIKPA PRINCELLA DOYOE", ""),
+            Triple("WFS-BECE27-017", "BADASU DENNIS NUKPLEM GODWINS", "+233242284984"),
+            Triple("WFS-BECE27-018", "BOATENG PRINCE ACHEMPONG", "+233244656132"),
+            Triple("WFS-BECE27-019", "BOATENG SEFA ISAAC RIGORBERT NANA KOFI AGYEMAN", "+233540546542"),
+            Triple("WFS-BECE27-020", "BRUCE NOWELL NII ODARTEY", "+233257004175"),
+            Triple("WFS-BECE27-021", "BUABENG BRIGHT FOSU", "+233553477947"),
+            Triple("WFS-BECE27-022", "CHASANTY HALISA HABIL", "+233557202129"),
+            Triple("WFS-BECE27-023", "COFIE GABRIELLE NAKI", "+233244111594"),
+            Triple("WFS-BECE27-024", "DADSON ZILLAH KWEGYIREBA", "+233247810007"),
+            Triple("WFS-BECE27-025", "ESIAKU EMMANUEL GERALD", "+233549515031"),
+            Triple("WFS-BECE27-026", "KUMOR KHLOE EMEFA", "+233242945725"),
+            Triple("WFS-BECE27-027", "MAVOR KAREN NHYIRA", "+233545257688"),
+            Triple("WFS-BECE27-028", "MIREKU VIDA AWURA ESI", "+233241797236"),
+            Triple("WFS-BECE27-029", "NYAMEDOR EMMANUELLA", "+233244889491"),
+            Triple("WFS-BECE27-030", "OFORIWAA NANCY", "+233553843928"),
+            Triple("WFS-BECE27-031", "OKRAH TETTEH CHRISTABEL ABIGAIL", "+233543701713"),
+            Triple("WFS-BECE27-032", "OPOKU ALBERTA AMPOMAH", "+233249321910"),
+            Triple("WFS-BECE27-033", "OWUSU LOIS TUTU", "+233555533067"),
+            Triple("WFS-BECE27-034", "QUAIDOO NHYIRA", "+233242238567"),
+            Triple("WFS-BECE27-035", "SAKYI CHRISTABEL MAFIA GLADYS", "+233242365365"),
+            Triple("WFS-BECE27-036", "SOMUAH CHRISTABEL OFOSUAH NANA ADJOA", "+233244384545"),
+            Triple("WFS-BECE27-037", "TAWIAH EMMANUEL KOFI", "+233243277271"),
+            Triple("WFS-BECE27-038", "TETTEH STEPHANIE OKAIKOR", "+233240075738"),
+            Triple("WFS-BECE27-039", "TOHOUNGOLIME ELIZABETH", "+233550314623"),
+            Triple("WFS-BECE27-040", "WILSON WILHELMINA", "+233243855880"),
+            Triple("WFS-BECE27-041", "YEBOAH KINGSLEY KOFI AGYAPONG", "")
         )
+        val sampleStudents = roster.map { (code, name, phone) ->
+            Student(
+                id = UUID.randomUUID().toString(),
+                userId = uid,
+                fullName = name,
+                studentCode = code,
+                gradeClass = "BECE 2027",
+                parentName = "Parent/Guardian of ${name.takeWhile { it != ' ' }}",
+                parentWhatsApp = phone,
+                attendanceDays = 65L,
+                totalTermDays = 65L,
+                createdAt = now,
+                updatedAt = now
+            )
+        }
         studentsFlow.value = sampleStudents
         persistStudents()
 
@@ -367,7 +417,7 @@ class GradePulseRepository internal constructor(
                     SubjectGradeRow("Computing & ICT", 96, "A+", "Top coding project in class"),
                     SubjectGradeRow("Social Studies", 85, "A", "Thoughtful civic discussions")
                 ),
-                Triple("1st of 28", "Kwame demonstrates exemplary leadership, curiosity, and academic discipline across all subjects.", "pending" to 0L)
+                Triple("1st of 41", "Demonstrates exemplary leadership, curiosity, and academic discipline across all subjects.", "pending" to 0L)
             ),
             Triple(sampleStudents[1],
                 listOf(
@@ -377,7 +427,7 @@ class GradePulseRepository internal constructor(
                     SubjectGradeRow("Computing & ICT", 84, "A", "Great digital presentation"),
                     SubjectGradeRow("Social Studies", 91, "A+", "Insightful historical analysis")
                 ),
-                Triple("2nd of 28", "Ama had 100% attendance this term and continues to inspire her peers with her communication skills.", "pending" to 0L)
+                Triple("2nd of 41", "Had 100% attendance this term and continues to inspire her peers with her communication skills.", "pending" to 0L)
             ),
             Triple(sampleStudents[2],
                 listOf(
@@ -387,7 +437,7 @@ class GradePulseRepository internal constructor(
                     SubjectGradeRow("Computing & ICT", 88, "A", "Enthusiastic learner"),
                     SubjectGradeRow("Social Studies", 81, "A", "Well-prepared assignments")
                 ),
-                Triple("6th of 26", "Nana Yaw has made commendable strides this term. Extra practice in algebra will propel him into the top 3.", "sent" to 1L)
+                Triple("6th of 41", "Has made commendable strides this term. Extra practice in algebra will propel them into the top 3.", "sent" to 1L)
             )
         )
 
@@ -438,6 +488,37 @@ class GradePulseRepository internal constructor(
             reportsFlow.value = updated
             persistReports()
         }
+    }
+
+    /**
+     * One-time migration: replace the original 4 placeholder students
+     * (studentCode GP-2026-10x) with the real BECE 2027 roster. Runs once per
+     * user profile; afterwards the roster is left untouched.
+     */
+    suspend fun migratePlaceholderRosterIfNeeded(): Result<Unit> = runCatching {
+        val current = studentsFlow.value
+        val hasPlaceholder = current.any { it.studentCode.startsWith("GP-2026-10") }
+        if (!hasPlaceholder) return@runCatching
+
+        val realCodes = listOf(
+            "WFS-BECE27-001", "WFS-BECE27-002", "WFS-BECE27-003", "WFS-BECE27-004",
+            "WFS-BECE27-005", "WFS-BECE27-006", "WFS-BECE27-007", "WFS-BECE27-008",
+            "WFS-BECE27-009", "WFS-BECE27-010", "WFS-BECE27-011", "WFS-BECE27-012",
+            "WFS-BECE27-013", "WFS-BECE27-014", "WFS-BECE27-015", "WFS-BECE27-016",
+            "WFS-BECE27-017", "WFS-BECE27-018", "WFS-BECE27-019", "WFS-BECE27-020",
+            "WFS-BECE27-021", "WFS-BECE27-022", "WFS-BECE27-023", "WFS-BECE27-024",
+            "WFS-BECE27-025", "WFS-BECE27-026", "WFS-BECE27-027", "WFS-BECE27-028",
+            "WFS-BECE27-029", "WFS-BECE27-030", "WFS-BECE27-031", "WFS-BECE27-032",
+            "WFS-BECE27-033", "WFS-BECE27-034", "WFS-BECE27-035", "WFS-BECE27-036",
+            "WFS-BECE27-037", "WFS-BECE27-038", "WFS-BECE27-039", "WFS-BECE27-040",
+            "WFS-BECE27-041"
+        ).toSet()
+        if (current.any { it.studentCode in realCodes }) return@runCatching
+
+        seedSampleSchoolData().getOrThrow()
+        // Drop placeholder report cards that reference the removed sample students.
+        reportsFlow.value = reportsFlow.value.filter { it.studentCode !in setOf("GP-2026-101", "GP-2026-102", "GP-2026-103", "GP-2026-104") }
+        persistReports()
     }
 
     suspend fun updateSchoolBrandingOnReportCards(
