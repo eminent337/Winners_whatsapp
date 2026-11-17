@@ -53,6 +53,13 @@ object WhatsAppSecurityValidator {
         if (digits.startsWith("00") && digits.length > MIN_E164_DIGITS + 2) {
             digits = digits.removePrefix("00")
         }
+        // Normalize Ghanaian local numbers (e.g. 024..., 053..., 055...) to international 233... format
+        if (digits.length == 10 && digits.startsWith("0")) {
+            val prefix3 = digits.take(3)
+            if (prefix3 in setOf("020", "023", "024", "025", "050", "053", "054", "055", "056", "057", "059")) {
+                digits = "233" + digits.substring(1)
+            }
+        }
         return if (digits.length in MIN_E164_DIGITS..MAX_E164_DIGITS) digits else null
     }
 

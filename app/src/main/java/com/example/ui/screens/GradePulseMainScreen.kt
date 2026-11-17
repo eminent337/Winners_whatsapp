@@ -208,6 +208,8 @@ fun GradePulseMainScreen(
             }
         )
     }
+    }
+    return
 
     fileForRecipientAssign?.let { target ->
         AssignParentDialog(
@@ -217,11 +219,12 @@ fun GradePulseMainScreen(
             onAssign = { stuName, parentName, parentWhatsApp, stuId ->
                 viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
                 fileForRecipientAssign = null
+                val normalizedPhone = com.example.data.model.normalizeParentPhone(parentWhatsApp)
                 val updatedFile = target.copy(
                     matchedStudentId = stuId,
                     studentName = stuName,
                     parentName = parentName,
-                    parentWhatsApp = parentWhatsApp
+                    parentWhatsApp = normalizedPhone
                 )
                 WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                     context = context,
@@ -233,8 +236,6 @@ fun GradePulseMainScreen(
                 )
             }
         )
-    }
-        return
     }
 
     // Confirm delete folder dialog
@@ -838,11 +839,12 @@ fun GradePulseMainScreen(
             onAssign = { stuName, parentName, parentWhatsApp, stuId ->
                 viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
                 fileForRecipientAssign = null
+                val normalizedPhone = com.example.data.model.normalizeParentPhone(parentWhatsApp)
                 val updatedFile = target.copy(
                     matchedStudentId = stuId,
                     studentName = stuName,
                     parentName = parentName,
-                    parentWhatsApp = parentWhatsApp
+                    parentWhatsApp = normalizedPhone
                 )
                 WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                     context = context,

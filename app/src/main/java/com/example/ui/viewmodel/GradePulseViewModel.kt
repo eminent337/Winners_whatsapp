@@ -17,6 +17,7 @@ import com.example.data.model.SubjectGradeRow
 import com.example.data.model.UploadedReportFile
 import com.example.data.model.buildUploadedFileWhatsAppCaption
 import com.example.data.model.normalizeThreadKey
+import com.example.data.model.normalizeParentPhone
 import com.example.data.RosterParser
 import com.example.data.repository.GradePulseRepository
 import com.example.data.repository.UploadedFolderRepository
@@ -462,14 +463,15 @@ class GradePulseViewModel(
         studentId: String = ""
     ) {
         viewModelScope.launch {
+            val normalizedPhone = normalizeParentPhone(parentWhatsApp)
             folderRepository.assignRecipient(
                 fileId = fileId,
                 studentName = studentName,
                 parentName = parentName,
-                parentWhatsApp = parentWhatsApp,
+                parentWhatsApp = normalizedPhone,
                 studentId = studentId
             )
-            showBannerMessage("Assigned to $studentName ($parentWhatsApp)")
+            showBannerMessage("Assigned to $studentName ($normalizedPhone)")
         }
     }
 

@@ -93,6 +93,26 @@ fun normalizeThreadKey(parentWhatsApp: String, studentId: String = ""): String {
     }
 }
 
+/**
+ * Normalizes a raw phone number into Ghanaian international format (`233XXXXXXXXX`).
+ * Handles 10-digit local numbers starting with `0` (e.g. `0248907473` -> `+233248907473`).
+ */
+fun normalizeParentPhone(rawPhone: String): String {
+    val trimmed = rawPhone.trim()
+    if (trimmed.isEmpty()) return ""
+    var digits = trimmed.filter { it.isDigit() }
+    if (digits.startsWith("00") && digits.length > 11) {
+        digits = digits.removePrefix("00")
+    }
+    if (digits.length == 10 && digits.startsWith("0")) {
+        val prefix3 = digits.take(3)
+        if (prefix3 in setOf("020", "023", "024", "025", "050", "053", "054", "055", "056", "057", "059")) {
+            digits = "233" + digits.substring(1)
+        }
+    }
+    return if (digits.startsWith("233") && digits.length >= 11) "+$digits" else trimmed
+}
+
 data class SubjectGradeRow(
     val subjectName: String,
     val score: Int,
