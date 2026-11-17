@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.FolderZip
@@ -1076,6 +1077,7 @@ fun AssignParentDialog(
     var parentName by remember(file.id) { mutableStateOf(file.parentName) }
     var parentWhatsApp by remember(file.id) { mutableStateOf(file.parentWhatsApp.ifBlank { "+233" }) }
     var validationError by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember(file.id) { mutableStateOf("") }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1121,13 +1123,35 @@ fun AssignParentDialog(
 
                 if (students.isNotEmpty()) {
                     Text(
-                        text = "Quick Pick from Saved Parents",
+                        text = "Quick Pick from Saved Students (${students.size})",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        students.take(8).forEach { stu ->
+                    // Search field to filter all students by name or parent
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Search student or parent") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val filteredStudents = remember(searchQuery, students) {
+                        if (searchQuery.isBlank()) students
+                        else students.filter {
+                            it.fullName.contains(searchQuery, ignoreCase = true) ||
+                                it.parentName.contains(searchQuery, ignoreCase = true) ||
+                                it.parentWhatsApp.contains(searchQuery, ignoreCase = true)
+                        }
+                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filteredStudents, key = { it.id }) { stu ->
                             Surface(
                                 onClick = {
                                     onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
@@ -1146,12 +1170,16 @@ fun AssignParentDialog(
                                         Text(
                                             text = stu.fullName,
                                             style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = "${stu.parentName} • ${stu.parentWhatsApp}",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                     Text(
@@ -1161,6 +1189,16 @@ fun AssignParentDialog(
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
+                            }
+                        }
+                        if (filteredStudents.isEmpty() && searchQuery.isNotBlank()) {
+                            item {
+                                Text(
+                                    text = "No student matches \"$searchQuery\"",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 12.dp)
+                                )
                             }
                         }
                     }
