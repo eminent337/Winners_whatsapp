@@ -280,6 +280,21 @@ class UploadedFolderRepository(
         _files.value = remaining
     }
 
+    /** Deletes all files in a folder (by folder name) and the folder directory. */
+    suspend fun deleteFolder(folderName: String) = withContext(Dispatchers.IO) {
+        val current = loadIndexFromDisk()
+        val toDelete = current.filter { it.folderName == folderName }
+        toDelete.forEach { file ->
+            runCatching { File(file.localFilePath).delete() }
+        }
+        val remaining = current.filter { it.folderName != folderName }
+        saveIndexToDisk(remaining)
+        _files.value = remaining
+        // Try to remove the now-empty folder directory
+        val cleanFolder = sanitizeFolderName(folderName)
+        runCatching { File(rootDir, cleanFolder).delete() }
+    }
+
     suspend fun generateSamplePdfReportCards(
         schoolName: String,
         academicTerm: String,

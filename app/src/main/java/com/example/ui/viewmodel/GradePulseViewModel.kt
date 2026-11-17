@@ -608,6 +608,13 @@ class GradePulseViewModel(
         }
     }
 
+    fun deleteFolder(folderName: String) {
+        viewModelScope.launch {
+            folderRepository.deleteFolder(folderName)
+            showBannerMessage("Deleted folder \"$folderName\" and all its files.")
+        }
+    }
+
     fun moveUploadedFilesToFolder(fileIds: List<String>, targetFolder: String) {
         viewModelScope.launch {
             folderRepository.moveFilesToFolder(fileIds, targetFolder)

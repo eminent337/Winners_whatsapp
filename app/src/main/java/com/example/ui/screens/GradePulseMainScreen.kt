@@ -137,6 +137,7 @@ fun GradePulseMainScreen(
     var previewFileId by rememberSaveable { mutableStateOf<String?>(null) }
     var activeChatTarget by remember { mutableStateOf<ActiveChatTarget?>(null) }
     var fileForRecipientAssign by remember { mutableStateOf<UploadedReportFile?>(null) }
+    var folderToDelete by remember { mutableStateOf<String?>(null) }
     var showCreateStudentDialog by remember { mutableStateOf(false) }
     var studentToEdit by remember { mutableStateOf<Student?>(null) }
     var showStartNewChatDialog by remember { mutableStateOf(false) }
@@ -223,6 +224,34 @@ fun GradePulseMainScreen(
             )
         }
         return
+    }
+
+    // Confirm delete folder dialog
+    folderToDelete?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { folderToDelete = null },
+            title = { Text("Delete folder?") },
+            text = {
+                Text(
+                    "Delete \"$folder\" and all its report files? This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteFolder(folder)
+                        folderToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Full-screen WhatsApp-style Parent Chat Conversation & History Screen
@@ -719,6 +748,9 @@ fun GradePulseMainScreen(
                     },
                     onMarkFilesDispatched = { ids ->
                         viewModel.markUploadedFilesDispatched(ids)
+                    },
+                    onRequestDeleteFolder = { folderName ->
+                        folderToDelete = folderName
                     }
                 )
                 2 -> NeatStudentsDirectoryTab(

@@ -132,7 +132,8 @@ fun UploadedFolderTab(
     onOpenFilePreview: (UploadedReportFile) -> Unit,
     onToggleSelectFile: (String) -> Unit,
     onRequestAssignRecipient: (UploadedReportFile) -> Unit,
-    onMarkFilesDispatched: (List<String>) -> Unit
+    onMarkFilesDispatched: (List<String>) -> Unit,
+    onRequestDeleteFolder: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val dividerColor = if (isSystemInDarkTheme()) Color(0xFF222E35) else WhatsAppDivider
@@ -332,6 +333,16 @@ fun UploadedFolderTab(
                                 )
                             },
                             label = { Text("$folder ($count)") },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Delete folder $folder",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .clickable { onRequestDeleteFolder(folder) }
+                                )
+                            },
                             shape = CircleShape,
                             border = null,
                             colors = chipColors
