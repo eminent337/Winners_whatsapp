@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +47,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -406,6 +410,7 @@ private fun WhatsAppThreadListRow(
 @Composable
 fun ParentChatThreadScreen(
     target: ActiveChatTarget,
+    student: Student? = null,
     messages: List<ChatMessage>,
     uploadedFiles: List<UploadedReportFile>,
     schoolName: String,
@@ -433,7 +438,7 @@ fun ParentChatThreadScreen(
     var attachedFile by remember(target.threadKey) { mutableStateOf<UploadedReportFile?>(null) }
     var showPickFileDialog by remember { mutableStateOf(false) }
     var showLogReplyDialog by remember { mutableStateOf(false) }
-
+    var showProfile by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -477,36 +482,45 @@ fun ParentChatThreadScreen(
                             contentDescription = "Back to Chats"
                         )
                     }
-                    Box(
+                    // Avatar + name region — tappable to open the profile panel (like WhatsApp)
+                    Row(
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
+                            .weight(1f)
+                            .clickable { showProfile = true }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = target.parentName.take(1).uppercase(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = target.parentName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${target.studentName} • ${target.parentWhatsApp}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = target.parentName.take(1).uppercase(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = target.parentName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${target.studentName} • ${target.parentWhatsApp}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     IconButton(
                         onClick = { showPickFileDialog = true },
@@ -899,6 +913,174 @@ fun ParentChatThreadScreen(
                 onLogParentReply(reply)
                 showLogReplyDialog = false
             }
+        )
+    }
+
+    if (showProfile) {
+        ParentProfileDialog(
+            target = target,
+            student = student,
+            onDismiss = { showProfile = false }
+        )
+    }
+}
+
+/**
+ * WhatsApp-style profile panel shown when the teacher taps the parent header in a chat.
+ * Shows student details + parent contact, with a one-tap copy of the parent's WhatsApp number.
+ */
+@Composable
+private fun ParentProfileDialog(
+    target: ActiveChatTarget,
+    student: Student?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    val primaryText = MaterialTheme.colorScheme.onSurface
+    val mutedText = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 640.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = target.parentName.take(1).uppercase(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = target.parentName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Parent / Guardian",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = mutedText
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+
+                // Student details section
+                Text(
+                    text = "STUDENT",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                ProfileDetailRow(label = "Name", value = student?.fullName ?: target.studentName, primaryText = primaryText)
+                student?.let {
+                    if (it.studentCode.isNotBlank()) {
+                        ProfileDetailRow(label = "Student ID", value = it.studentCode, primaryText = primaryText)
+                    }
+                    if (it.gradeClass.isNotBlank()) {
+                        ProfileDetailRow(label = "Class", value = it.gradeClass, primaryText = primaryText)
+                    }
+                    if (it.totalTermDays > 0) {
+                        ProfileDetailRow(label = "Attendance", value = it.formattedAttendance, primaryText = primaryText)
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+
+                // Parent contact section
+                Text(
+                    text = "PARENT CONTACT",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                ProfileDetailRow(label = "Name", value = student?.parentName ?: target.parentName, primaryText = primaryText)
+                ProfileDetailRow(label = "WhatsApp", value = target.parentWhatsApp, primaryText = primaryText)
+
+                // Copy WhatsApp number button
+                Button(
+                    onClick = {
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("WhatsApp Number", target.parentWhatsApp))
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("copy_parent_whatsapp_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WhatsAppGreenAccent,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Copy WhatsApp Number", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/** A single label/value row used in the parent profile panel. */
+@Composable
+private fun ProfileDetailRow(
+    label: String,
+    value: String,
+    primaryText: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = primaryText,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End
         )
     }
 }

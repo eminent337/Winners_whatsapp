@@ -227,8 +227,13 @@ fun GradePulseMainScreen(
         val threadMessages = remember(allChatMessages, currentChat.threadKey) {
             allChatMessages.filter { it.threadKey == currentChat.threadKey }
         }
+        val chatStudent = remember(studentsList, currentChat.studentId) {
+            studentsList.firstOrNull { it.id == currentChat.studentId }
+                ?: studentsList.firstOrNull { it.parentWhatsApp == currentChat.parentWhatsApp }
+        }
         ParentChatThreadScreen(
             target = currentChat,
+            student = chatStudent,
             messages = threadMessages,
             uploadedFiles = uploadedFiles,
             schoolName = schoolSettings.schoolName,
