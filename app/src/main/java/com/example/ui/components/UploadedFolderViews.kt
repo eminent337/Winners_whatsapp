@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.FolderZip
@@ -626,6 +627,7 @@ private fun WhatsAppFolderFileRow(
 @Composable
 fun UploadedReportPreviewScreen(
     file: UploadedReportFile,
+    latestFile: () -> UploadedReportFile?,
     schoolName: String,
     academicTerm: String,
     principalSignature: String,
@@ -636,6 +638,7 @@ fun UploadedReportPreviewScreen(
     onDeleteFile: (String) -> Unit
 ) {
     BackHandler(onBack = onBack)
+    val currentFile = latestFile() ?: file
 
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
@@ -723,17 +726,17 @@ fun UploadedReportPreviewScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = file.displayStudentOrFile,
+                            text = currentFile.displayStudentOrFile,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = if (file.hasAssignedRecipient) {
-                                "${file.parentName} • ${file.parentWhatsApp}"
+                            text = if (currentFile.hasAssignedRecipient) {
+                                "${currentFile.parentName} • ${currentFile.parentWhatsApp}"
                             } else {
-                                file.fileName
+                                currentFile.fileName
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -957,9 +960,9 @@ fun UploadedReportPreviewScreen(
             // Confirm that the file was actually sent in WhatsApp. Shown only once a
             // parent WhatsApp is assigned, so the teacher can mark it sent after
             // sending (opening WhatsApp alone does not confirm delivery).
-            if (file.hasAssignedRecipient && !file.isSent) {
+            if (currentFile.hasAssignedRecipient && !currentFile.isSent) {
                 Surface(
-                    onClick = { onMarkDispatched(listOf(file.id)) },
+                    onClick = { onMarkDispatched(listOf(currentFile.id)) },
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier
@@ -982,7 +985,7 @@ fun UploadedReportPreviewScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (file.whatsappStatus == "opened") "Confirm sent to ${file.parentName}" else "Mark as sent",
+                            text = if (currentFile.whatsappStatus == "opened") "Confirm sent to ${currentFile.parentName}" else "Mark as sent",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.SemiBold
@@ -1038,7 +1041,7 @@ fun UploadedReportPreviewScreen(
                         // as sent here; they confirm with "Mark as sent" after sending.
                         WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                             context = context,
-                            file = file,
+                            file = currentFile,
                             schoolName = schoolName,
                             academicTerm = academicTerm,
                             principalSignature = principalSignature,
@@ -1078,6 +1081,21 @@ fun AssignParentDialog(
     var parentWhatsApp by remember(file.id) { mutableStateOf(file.parentWhatsApp.ifBlank { "+233" }) }
     var validationError by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember(file.id) { mutableStateOf("") }
+    var selectedTab by remember(file.id) { mutableStateOf("suggested") }
+
+    // Auto-match: compare the file name against student names (tokens length >= 3)
+    val normalizedFile = remember(file.id) {
+        file.fileName.lowercase().replace(Regex("[^a-z0-9]"), " ")
+    }
+    val suggestedStudents = remember(file.id, students) {
+        if (students.isEmpty()) emptyList() else students.sortedByDescending { stu ->
+            val tokens = stu.fullName.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 3 }
+            tokens.count { normalizedFile.contains(it) }
+        }.filter { stu ->
+            val tokens = stu.fullName.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 3 }
+            tokens.isNotEmpty() && tokens.any { normalizedFile.contains(it) }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1122,13 +1140,40 @@ fun AssignParentDialog(
                 }
 
                 if (students.isNotEmpty()) {
-                    Text(
-                        text = "Quick Pick from Saved Students (${students.size})",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    // Search field to filter all students by name or parent
+                    // Two tab buttons: Suggested (default) and All Students
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedTab == "suggested",
+                            onClick = { selectedTab = "suggested" },
+                            label = {
+                                Text(
+                                    "Suggested (${suggestedStudents.size})",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingIcon = if (selectedTab == "suggested") {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
+                        FilterChip(
+                            selected = selectedTab == "all",
+                            onClick = { selectedTab = "all" },
+                            label = {
+                                Text(
+                                    "All Students (${students.size})",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingIcon = if (selectedTab == "all") {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
+                    }
+
+                    // Search field (shown on both tabs)
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -1137,9 +1182,11 @@ fun AssignParentDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    val filteredStudents = remember(searchQuery, students) {
-                        if (searchQuery.isBlank()) students
-                        else students.filter {
+
+                    val baseList = if (selectedTab == "suggested") suggestedStudents else students
+                    val filteredStudents = remember(searchQuery, baseList) {
+                        if (searchQuery.isBlank()) baseList
+                        else baseList.filter {
                             it.fullName.contains(searchQuery, ignoreCase = true) ||
                                 it.parentName.contains(searchQuery, ignoreCase = true) ||
                                 it.parentWhatsApp.contains(searchQuery, ignoreCase = true)
@@ -1152,12 +1199,17 @@ fun AssignParentDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(filteredStudents, key = { it.id }) { stu ->
+                            val isSuggested = selectedTab == "suggested" &&
+                                stu.fullName.lowercase().split(Regex("[^a-z0-9]+"))
+                                    .filter { it.length >= 3 }
+                                    .any { normalizedFile.contains(it) }
                             Surface(
                                 onClick = {
                                     onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
+                                color = if (isSuggested) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1167,13 +1219,24 @@ fun AssignParentDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = stu.fullName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (isSuggested) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Star,
+                                                    contentDescription = "Suggested match",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                            }
+                                            Text(
+                                                text = stu.fullName,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                         Text(
                                             text = "${stu.parentName} • ${stu.parentWhatsApp}",
                                             style = MaterialTheme.typography.bodySmall,
@@ -1195,6 +1258,15 @@ fun AssignParentDialog(
                             item {
                                 Text(
                                     text = "No student matches \"$searchQuery\"",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 12.dp)
+                                )
+                            }
+                        } else if (filteredStudents.isEmpty() && selectedTab == "suggested" && searchQuery.isBlank()) {
+                            item {
+                                Text(
+                                    text = "No auto-match found. Try the 'All Students' tab to pick manually.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(vertical = 12.dp)

@@ -175,6 +175,7 @@ fun GradePulseMainScreen(
     if (activePreviewFile != null) {
         UploadedReportPreviewScreen(
             file = activePreviewFile,
+            latestFile = { previewFileId?.let { id -> uploadedFiles.find { it.id == id } } },
             schoolName = schoolSettings.schoolName,
             academicTerm = schoolSettings.academicTerm,
             principalSignature = schoolSettings.principalSignature,
