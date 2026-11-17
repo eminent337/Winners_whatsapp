@@ -58,13 +58,14 @@ jobs:
         run: |
           mkdir -p site
           cp app/build/outputs/apk/debug/app-debug.apk site/GradePulse-WinnersFamilySchool.apk
+          cp app/build/outputs/apk/debug/app-debug.apk site/GradeSubmit.apk
           cp .github/pages/index.html site/index.html
 
       - name: Upload APK workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GradePulse-WinnersFamilySchool-apk
-          path: site/GradePulse-WinnersFamilySchool.apk
+          name: GradeSubmit-apk
+          path: site/GradeSubmit.apk
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -76,12 +77,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest site/GradePulse-WinnersFamilySchool.apk --clobber
+            gh release edit latest --title "GradeSubmit v1.3 — Winners Family School" --notes "Latest GradeSubmit v1.3 build (commit ${{ github.sha }}). Download GradeSubmit.apk or GradePulse-WinnersFamilySchool.apk."
+            gh release upload latest site/GradePulse-WinnersFamilySchool.apk site/GradeSubmit.apk --clobber
           else
-            gh release create latest site/GradePulse-WinnersFamilySchool.apk \
+            gh release create latest site/GradePulse-WinnersFamilySchool.apk site/GradeSubmit.apk \
               --target "${{ github.sha }}" \
-              --title "GradePulse — Winners Family School" \
-              --notes "Latest Android APK build for Winners Family School. Download and install GradePulse-WinnersFamilySchool.apk on any Android device."
+              --title "GradeSubmit v1.3 — Winners Family School" \
+              --notes "Latest GradeSubmit v1.3 build (commit ${{ github.sha }}). Download GradeSubmit.apk or GradePulse-WinnersFamilySchool.apk."
           fi
 
   deploy_pages:

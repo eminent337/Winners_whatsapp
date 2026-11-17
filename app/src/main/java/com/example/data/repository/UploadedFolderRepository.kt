@@ -203,7 +203,7 @@ class UploadedFolderRepository(
         parentWhatsApp: String,
         studentId: String = ""
     ) = withContext(Dispatchers.IO) {
-        val current = loadIndexFromDisk()
+        val current = _files.value.ifEmpty { loadIndexFromDisk() }
         val updated = current.map { file ->
             if (file.id == fileId) {
                 file.copy(
@@ -216,8 +216,10 @@ class UploadedFolderRepository(
                 file
             }
         }
+        withContext(Dispatchers.Main) {
+            _files.value = updated
+        }
         saveIndexToDisk(updated)
-        _files.value = updated
     }
 
     suspend fun markDispatched(fileIds: List<String>) = withContext(Dispatchers.IO) {

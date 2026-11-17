@@ -821,16 +821,16 @@ fun UploadedReportPreviewScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (file.hasAssignedRecipient) "WHATSAPP RECIPIENT" else "ASSIGN PARENT WHATSAPP",
+                                text = if (currentFile.hasAssignedRecipient) "ASSIGNED RECIPIENT" else "ASSIGN PARENT WHATSAPP",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = WhatsAppTealDark,
+                                color = if (currentFile.hasAssignedRecipient) WhatsAppGreenAccent else WhatsAppTealDark,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (file.hasAssignedRecipient) {
-                                    "${file.parentName.ifBlank { "Parent" }} (${file.parentWhatsApp})"
+                                text = if (currentFile.hasAssignedRecipient) {
+                                    "${currentFile.displayStudentOrFile}\n${currentFile.parentName.ifBlank { "Parent" }} • ${currentFile.parentWhatsApp}"
                                 } else {
-                                    "Tap Assign to pick a parent or type their number"
+                                    "Tap Assign to pick a student & parent"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = primaryText
@@ -840,11 +840,11 @@ fun UploadedReportPreviewScreen(
                         OutlinedButton(
                             onClick = onRequestAssignParent,
                             shape = CircleShape,
-                            border = BorderStroke(1.dp, WhatsAppTealDark)
+                            border = BorderStroke(1.dp, if (currentFile.hasAssignedRecipient) WhatsAppGreenAccent else WhatsAppTealDark)
                         ) {
                             Text(
-                                text = if (file.hasAssignedRecipient) "Change" else "Assign",
-                                color = WhatsAppTealDark,
+                                text = if (currentFile.hasAssignedRecipient) "Change" else "Assign",
+                                color = if (currentFile.hasAssignedRecipient) WhatsAppGreenAccent else WhatsAppTealDark,
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
@@ -1047,9 +1047,10 @@ fun UploadedReportPreviewScreen(
 
                 Surface(
                     onClick = {
-                        // Opening WhatsApp pre-filled does not guarantee the file was
-                        // sent — the teacher can cancel inside WhatsApp. Do NOT mark
-                        // as sent here; they confirm with "Mark as sent" after sending.
+                        if (!currentFile.hasAssignedRecipient) {
+                            onRequestAssignParent()
+                            return@Surface
+                        }
                         WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                             context = context,
                             file = currentFile,

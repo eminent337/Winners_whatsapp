@@ -469,7 +469,7 @@ class GradePulseViewModel(
                 parentWhatsApp = parentWhatsApp,
                 studentId = studentId
             )
-            showBannerMessage("Assigned parent WhatsApp ($parentWhatsApp) to report card.")
+            showBannerMessage("Assigned to $studentName ($parentWhatsApp)")
         }
     }
 

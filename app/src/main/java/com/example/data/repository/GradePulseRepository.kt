@@ -396,7 +396,7 @@ class GradePulseRepository internal constructor(
                 fullName = name,
                 studentCode = code,
                 gradeClass = "BECE 2027",
-                parentName = "Parent/Guardian of ${name.takeWhile { it != ' ' }}",
+                parentName = "Parent of ${name.takeWhile { it != ' ' }}",
                 parentWhatsApp = phone,
                 attendanceDays = 65L,
                 totalTermDays = 65L,
@@ -513,7 +513,23 @@ class GradePulseRepository internal constructor(
             "WFS-BECE27-037", "WFS-BECE27-038", "WFS-BECE27-039", "WFS-BECE27-040",
             "WFS-BECE27-041"
         ).toSet()
-        if (current.any { it.studentCode in realCodes }) return@runCatching
+        if (current.any { it.studentCode in realCodes }) {
+            // Also clean up any legacy "Parent/Guardian" labels on already-seeded profiles
+            val hasParentGuardian = current.any { it.parentName.startsWith("Parent/Guardian") }
+            if (hasParentGuardian) {
+                studentsFlow.value = current.map { stu ->
+                    if (stu.parentName.startsWith("Parent/Guardian of ")) {
+                        stu.copy(parentName = stu.parentName.replace("Parent/Guardian of ", "Parent of "))
+                    } else if (stu.parentName == "Parent/Guardian") {
+                        stu.copy(parentName = "Parent of ${stu.fullName.takeWhile { it != ' ' }}")
+                    } else {
+                        stu
+                    }
+                }
+                persistStudents()
+            }
+            return@runCatching
+        }
 
         seedSampleSchoolData().getOrThrow()
         // Drop placeholder report cards that reference the removed sample students.

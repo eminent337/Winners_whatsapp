@@ -219,9 +219,9 @@ fun WhatsAppChatsTab(
                     )
                 }
                 items(unchattedParents, key = { "contact_${it.id}" }) { stu ->
-                    val initials = remember(stu.parentName) {
-                        stu.parentName.split(" ").filter { it.isNotBlank() }.take(2)
-                            .joinToString("") { it.take(1).uppercase() }.ifBlank { "P" }
+                    val initials = remember(stu.fullName) {
+                        stu.fullName.split(" ").filter { it.isNotBlank() }.take(2)
+                            .joinToString("") { it.take(1).uppercase() }.ifBlank { "S" }
                     }
                     Column(
                         modifier = Modifier
@@ -262,14 +262,14 @@ fun WhatsAppChatsTab(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = stu.parentName,
+                                    text = stu.fullName,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Parent of ${stu.fullName} • ${stu.parentWhatsApp}",
+                                    text = "${stu.parentName.ifBlank { "Parent of " + stu.fullName }} • ${stu.parentWhatsApp}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -295,9 +295,10 @@ private fun WhatsAppThreadListRow(
     dividerColor: Color,
     onClick: () -> Unit
 ) {
-    val initials = remember(thread.parentName) {
-        thread.parentName.split(" ").filter { it.isNotBlank() }.take(2)
-            .joinToString("") { it.take(1).uppercase() }.ifBlank { "P" }
+    val displayName = thread.studentName.ifBlank { thread.parentName }
+    val initials = remember(displayName) {
+        displayName.split(" ").filter { it.isNotBlank() }.take(2)
+            .joinToString("") { it.take(1).uppercase() }.ifBlank { "S" }
     }
     val previewSummary = remember(thread.lastAttachmentName, thread.lastMessageText) {
         if (thread.lastAttachmentName.isNotBlank()) {
@@ -343,9 +344,9 @@ private fun WhatsAppThreadListRow(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = thread.parentName,
+                        text = displayName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -498,7 +499,7 @@ fun ParentChatThreadScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = target.parentName.take(1).uppercase(),
+                                text = target.studentName.take(1).uppercase().ifBlank { "S" },
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Bold
@@ -507,14 +508,14 @@ fun ParentChatThreadScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = target.parentName,
+                                text = target.studentName,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${target.studentName} • ${target.parentWhatsApp}",
+                                text = "${target.parentName.ifBlank { "Parent of " + target.studentName }} • ${target.parentWhatsApp}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -971,7 +972,7 @@ private fun ParentProfileDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = target.parentName.take(1).uppercase(),
+                            text = target.studentName.take(1).uppercase().ifBlank { "S" },
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             fontWeight = FontWeight.Bold
@@ -980,7 +981,7 @@ private fun ParentProfileDialog(
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = target.parentName,
+                            text = student?.fullName ?: target.studentName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = primaryText,
@@ -988,7 +989,7 @@ private fun ParentProfileDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Parent / Guardian",
+                            text = "${target.parentName.ifBlank { "Parent" }} • ${target.parentWhatsApp}",
                             style = MaterialTheme.typography.bodySmall,
                             color = mutedText
                         )

@@ -138,6 +138,15 @@ object WhatsAppDispatcher {
             customIntroNote = customIntroNote
         )
         val mimeType = file.mimeType.ifBlank { if (file.isPdf) "application/pdf" else "image/*" }
+        if (file.hasAssignedRecipient) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("Parent WhatsApp", file.parentWhatsApp))
+            android.widget.Toast.makeText(
+                context,
+                "Opening WhatsApp for ${file.displayStudentOrFile}'s parent (${file.parentWhatsApp})",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
         return WhatsAppDispatchService.startReportFileDispatch(
             context = context,
             filePath = file.localFilePath,

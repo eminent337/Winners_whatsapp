@@ -210,19 +210,16 @@ fun GradePulseMainScreen(
     }
 
     fileForRecipientAssign?.let { target ->
-            AssignParentDialog(
-                file = target,
-                students = studentsList,
-                onDismiss = { fileForRecipientAssign = null },
-                onAssign = { stuName, parentName, parentWhatsApp, stuId ->
-                    viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
-                    // Delay dismissal to let the async assignment propagate to the StateFlow
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        fileForRecipientAssign = null
-                    }, 300)
-                }
-            )
-        }
+        AssignParentDialog(
+            file = target,
+            students = studentsList,
+            onDismiss = { fileForRecipientAssign = null },
+            onAssign = { stuName, parentName, parentWhatsApp, stuId ->
+                viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
+                fileForRecipientAssign = null
+            }
+        )
+    }
         return
     }
 
