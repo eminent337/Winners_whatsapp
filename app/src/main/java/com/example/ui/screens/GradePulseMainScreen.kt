@@ -93,7 +93,8 @@ import com.example.data.model.Student
 import com.example.data.model.UploadedReportFile
 import com.example.data.model.normalizeThreadKey
 import com.example.ui.components.ActiveChatTarget
-import com.example.ui.components.SelectParentDialog
+import com.example.ui.components.AssignParentDialog
+import com.example.ui.components.BatchSelectedSendDialog
 import com.example.ui.components.CreateStudentDialog
 import com.example.ui.components.ParentChatThreadScreen
 import com.example.ui.components.StartNewChatDialog
@@ -136,10 +137,6 @@ fun GradePulseMainScreen(
     var previewFileId by rememberSaveable { mutableStateOf<String?>(null) }
     var activeChatTarget by remember { mutableStateOf<ActiveChatTarget?>(null) }
     var fileForRecipientAssign by remember { mutableStateOf<UploadedReportFile?>(null) }
-    // Forward-style send: set when the teacher taps Send; the parent picker then
-    // opens WhatsApp immediately with the chosen recipient (no persisted assignment).
-    var pendingSendFileId by remember { mutableStateOf<String?>(null) }
-    var pendingSendCaption by remember { mutableStateOf("") }
     var folderToDelete by remember { mutableStateOf<String?>(null) }
     var showCreateStudentDialog by remember { mutableStateOf(false) }
     var studentToEdit by remember { mutableStateOf<Student?>(null) }
@@ -185,11 +182,7 @@ fun GradePulseMainScreen(
             principalSignature = schoolSettings.principalSignature,
             defaultIntroNote = schoolSettings.customWhatsAppGreeting,
             onBack = { previewFileId = null },
-            onRequestSelectParent = {
-                pendingSendFileId = activePreviewFile.id
-                pendingSendCaption = ""
-                fileForRecipientAssign = activePreviewFile
-            },
+            onRequestAssignParent = { fileForRecipientAssign = activePreviewFile },
             onMarkDispatched = { ids -> viewModel.markUploadedFilesDispatched(ids) },
             onDeleteFile = { id ->
                 viewModel.deleteUploadedFiles(listOf(id))
@@ -216,58 +209,17 @@ fun GradePulseMainScreen(
         )
     }
 
-    // Forward-style send picker: shown when Send is tapped (folder row, folder
-    // toolbar, or file preview). Choosing a parent opens WhatsApp immediately with
-    // that recipient — nothing is persisted, so no stale-assignment bug is possible.
     fileForRecipientAssign?.let { target ->
-            SelectParentDialog(
+            AssignParentDialog(
                 file = target,
                 students = studentsList,
-                onDismiss = {
-                    fileForRecipientAssign = null
-                    pendingSendFileId = null
-                },
-                onSelect = { stuName, parentName, parentWhatsApp, stuId ->
-                    val liveFile = uploadedFiles.find { it.id == target.id } ?: target
-                    val recipient = liveFile.copy(
-                        studentName = stuName,
-                        parentName = parentName,
-                        parentWhatsApp = parentWhatsApp,
-                        matchedStudentId = stuId
-                    )
-                    if (pendingSendFileId == "BATCH") {
-                        // One recipient, every selected file: share them together.
-                        val batch = uploadedFiles.filter { it.id in validSelectedIds }
-                        WhatsAppDispatcher.shareMultipleFilesToWhatsApp(
-                            context = context,
-                            files = batch.map { f ->
-                                if (f.id == liveFile.id) recipient else f.copy(
-                                    studentName = stuName,
-                                    parentName = parentName,
-                                    parentWhatsApp = parentWhatsApp,
-                                    matchedStudentId = stuId
-                                )
-                            },
-                            schoolName = schoolSettings.schoolName,
-                            academicTerm = schoolSettings.academicTerm,
-                            principalSignature = schoolSettings.principalSignature,
-                            customIntroNote = pendingSendCaption
-                        )
-                    } else {
-                        WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
-                            context = context,
-                            file = recipient,
-                            schoolName = schoolSettings.schoolName,
-                            academicTerm = schoolSettings.academicTerm,
-                            principalSignature = schoolSettings.principalSignature,
-                            customIntroNote = pendingSendCaption
-                        )
-                    }
-                    fileForRecipientAssign = null
-                    pendingSendFileId = null
-                    pendingSendCaption = ""
-                    selectedFileIds = emptySet()
-                    showBatchSelectedSendDialog = false
+                onDismiss = { fileForRecipientAssign = null },
+                onAssign = { stuName, parentName, parentWhatsApp, stuId ->
+                    viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
+                    // Delay dismissal to let the async assignment propagate to the StateFlow
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        fileForRecipientAssign = null
+                    }, 300)
                 }
             )
         }
@@ -410,12 +362,22 @@ fun GradePulseMainScreen(
                             IconButton(
                                 onClick = {
                                     val chosen = uploadedFiles.filter { it.id in validSelectedIds }
-                                    if (chosen.isNotEmpty()) {
-                                        // Forward-style: Send opens the parent picker;
-                                        // choosing a parent opens WhatsApp immediately.
-                                        fileForRecipientAssign = chosen.first()
-                                        pendingSendFileId = if (chosen.size == 1) chosen.first().id else "BATCH"
-                                        pendingSendCaption = schoolSettings.customWhatsAppGreeting
+                                    if (chosen.size == 1) {
+                                        val single = chosen.first()
+                                        val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                                            context = context,
+                                            file = single,
+                                            schoolName = schoolSettings.schoolName,
+                                            academicTerm = schoolSettings.academicTerm,
+                                            principalSignature = schoolSettings.principalSignature,
+                                            customIntroNote = schoolSettings.customWhatsAppGreeting
+                                        )
+                                        if (launched) {
+                                            viewModel.markUploadedFilesDispatched(listOf(single.id))
+                                        }
+                                        selectedFileIds = emptySet()
+                                    } else if (chosen.size > 1) {
+                                        showBatchSelectedSendDialog = true
                                     }
                                 },
                                 modifier = Modifier.testTag("send_selected_files_button")
@@ -782,10 +744,7 @@ fun GradePulseMainScreen(
                         }
                     },
                     onRequestAssignRecipient = { file ->
-                        // Forward-style: Send opens the parent picker for this file.
                         fileForRecipientAssign = file
-                        pendingSendFileId = file.id
-                        pendingSendCaption = schoolSettings.customWhatsAppGreeting
                     },
                     onMarkFilesDispatched = { ids ->
                         viewModel.markUploadedFilesDispatched(ids)
@@ -860,16 +819,34 @@ fun GradePulseMainScreen(
         )
     }
 
-    // Batch send (2+ files selected) uses the same forward-style flow: Send opens
-    // the parent picker, and that one recipient is used for every selected file.
-    if (showBatchSelectedSendDialog && pendingSendFileId == null) {
+    fileForRecipientAssign?.let { target ->
+        AssignParentDialog(
+            file = target,
+            students = studentsList,
+            onDismiss = { fileForRecipientAssign = null },
+            onAssign = { stuName, parentName, parentWhatsApp, stuId ->
+                viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
+                fileForRecipientAssign = null
+            }
+        )
+    }
+
+    if (showBatchSelectedSendDialog) {
         val chosenFiles = uploadedFiles.filter { it.id in validSelectedIds }
-        if (chosenFiles.isNotEmpty()) {
-            fileForRecipientAssign = chosenFiles.first()
-            pendingSendFileId = "BATCH"
-            pendingSendCaption = schoolSettings.customWhatsAppGreeting
-            showBatchSelectedSendDialog = false
-        }
+        BatchSelectedSendDialog(
+            selectedFiles = chosenFiles,
+            schoolName = schoolSettings.schoolName,
+            academicTerm = schoolSettings.academicTerm,
+            principalSignature = schoolSettings.principalSignature,
+            customIntroNote = schoolSettings.customWhatsAppGreeting,
+            onDismiss = {
+                showBatchSelectedSendDialog = false
+                selectedFileIds = emptySet()
+            },
+            onMarkDispatched = { ids ->
+                viewModel.markUploadedFilesDispatched(ids)
+            }
+        )
     }
 
     if (showDeleteParentsConfirmDialog && validSelectedStudentIds.isNotEmpty()) {
