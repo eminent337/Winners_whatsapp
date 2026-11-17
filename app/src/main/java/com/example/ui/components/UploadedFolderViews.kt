@@ -1134,7 +1134,7 @@ fun AssignParentDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Assign Parent WhatsApp",
+                            text = "Send to Parent",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -1144,6 +1144,11 @@ fun AssignParentDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Tap Send next to a student to open WhatsApp immediately",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(onClick = onDismiss) {
@@ -1258,7 +1263,7 @@ fun AssignParentDialog(
                                         )
                                     }
                                     Text(
-                                        text = "Select",
+                                        text = "Send",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold
@@ -1343,7 +1348,7 @@ fun AssignParentDialog(
                             } else {
                                 onAssign(
                                     studentName.ifBlank { file.displayStudentOrFile },
-                                    parentName.ifBlank { "Parent/Guardian" },
+                                    parentName.ifBlank { "Parent of " + (studentName.ifBlank { file.displayStudentOrFile }) },
                                     parentWhatsApp.trim(),
                                     ""
                                 )
@@ -1355,7 +1360,7 @@ fun AssignParentDialog(
                             contentColor = Color.White
                         )
                     ) {
-                        Text("Assign & Save", fontWeight = FontWeight.SemiBold)
+                        Text("Send on WhatsApp", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

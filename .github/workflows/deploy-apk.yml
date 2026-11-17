@@ -77,12 +77,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "GradeSubmit v1.3 — Winners Family School" --notes "Latest GradeSubmit v1.3 build (commit ${{ github.sha }}). Download GradeSubmit.apk or GradePulse-WinnersFamilySchool.apk."
+            gh release edit latest --title "GradeSubmit v1.4 — Winners Family School" --notes "Latest GradeSubmit v1.3 build (commit ${{ github.sha }}). Download GradeSubmit.apk or GradePulse-WinnersFamilySchool.apk."
             gh release upload latest site/GradePulse-WinnersFamilySchool.apk site/GradeSubmit.apk --clobber
           else
             gh release create latest site/GradePulse-WinnersFamilySchool.apk site/GradeSubmit.apk \
               --target "${{ github.sha }}" \
-              --title "GradeSubmit v1.3 — Winners Family School" \
+              --title "GradeSubmit v1.4 — Winners Family School" \
               --notes "Latest GradeSubmit v1.3 build (commit ${{ github.sha }}). Download GradeSubmit.apk or GradePulse-WinnersFamilySchool.apk."
           fi
 

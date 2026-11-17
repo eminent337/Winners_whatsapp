@@ -217,6 +217,20 @@ fun GradePulseMainScreen(
             onAssign = { stuName, parentName, parentWhatsApp, stuId ->
                 viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
                 fileForRecipientAssign = null
+                val updatedFile = target.copy(
+                    matchedStudentId = stuId,
+                    studentName = stuName,
+                    parentName = parentName,
+                    parentWhatsApp = parentWhatsApp
+                )
+                WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                    context = context,
+                    file = updatedFile,
+                    schoolName = schoolSettings.schoolName,
+                    academicTerm = schoolSettings.academicTerm,
+                    principalSignature = schoolSettings.principalSignature,
+                    customIntroNote = ""
+                )
             }
         )
     }
@@ -824,6 +838,20 @@ fun GradePulseMainScreen(
             onAssign = { stuName, parentName, parentWhatsApp, stuId ->
                 viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
                 fileForRecipientAssign = null
+                val updatedFile = target.copy(
+                    matchedStudentId = stuId,
+                    studentName = stuName,
+                    parentName = parentName,
+                    parentWhatsApp = parentWhatsApp
+                )
+                WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                    context = context,
+                    file = updatedFile,
+                    schoolName = schoolSettings.schoolName,
+                    academicTerm = schoolSettings.academicTerm,
+                    principalSignature = schoolSettings.principalSignature,
+                    customIntroNote = ""
+                )
             }
         )
     }
