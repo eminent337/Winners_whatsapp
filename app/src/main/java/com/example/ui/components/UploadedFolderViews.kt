@@ -444,21 +444,8 @@ fun UploadedFolderTab(
                         onToggleSelectFile(file.id)
                     },
                     onQuickSend = {
-                        if (file.hasAssignedRecipient) {
-                            val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
-                                context = context,
-                                file = file,
-                                schoolName = schoolName,
-                                academicTerm = academicTerm,
-                                principalSignature = principalSignature,
-                                customIntroNote = customIntroNote
-                            )
-                            if (launched) {
-                                onMarkFilesDispatched(listOf(file.id))
-                            }
-                        } else {
-                            onRequestAssignRecipient(file)
-                        }
+                        // Forward-style: always ask who to send to first.
+                        onRequestAssignRecipient(file)
                     }
                 )
             }
@@ -644,7 +631,7 @@ fun UploadedReportPreviewScreen(
     principalSignature: String,
     defaultIntroNote: String,
     onBack: () -> Unit,
-    onRequestAssignParent: () -> Unit,
+    onRequestSelectParent: () -> Unit,
     onMarkDispatched: (List<String>) -> Unit,
     onDeleteFile: (String) -> Unit
 ) {
@@ -756,7 +743,7 @@ fun UploadedReportPreviewScreen(
                         )
                     }
                     IconButton(
-                        onClick = onRequestAssignParent,
+                        onClick = onRequestSelectParent,
                         modifier = Modifier.testTag("assign_parent_button")
                     ) {
                         Icon(
@@ -838,7 +825,7 @@ fun UploadedReportPreviewScreen(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         OutlinedButton(
-                            onClick = onRequestAssignParent,
+                            onClick = onRequestSelectParent,
                             shape = CircleShape,
                             border = BorderStroke(1.dp, WhatsAppTealDark)
                         ) {
@@ -1047,17 +1034,9 @@ fun UploadedReportPreviewScreen(
 
                 Surface(
                     onClick = {
-                        // Opening WhatsApp pre-filled does not guarantee the file was
-                        // sent — the teacher can cancel inside WhatsApp. Do NOT mark
-                        // as sent here; they confirm with "Mark as sent" after sending.
-                        WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
-                            context = context,
-                            file = currentFile,
-                            schoolName = schoolName,
-                            academicTerm = academicTerm,
-                            principalSignature = principalSignature,
-                            customIntroNote = customParentNote
-                        )
+                        // Forward-style: ask who to send to BEFORE opening WhatsApp,
+                        // then hand the chosen recipient straight to the send action.
+                        onRequestSelectParent()
                     },
                     shape = CircleShape,
                     color = WhatsAppGreenAccent,
@@ -1081,11 +1060,11 @@ fun UploadedReportPreviewScreen(
 }
 
 @Composable
-fun AssignParentDialog(
+fun SelectParentDialog(
     file: UploadedReportFile,
     students: List<Student>,
     onDismiss: () -> Unit,
-    onAssign: (studentName: String, parentName: String, parentWhatsApp: String, studentId: String) -> Unit
+    onSelect: (studentName: String, parentName: String, parentWhatsApp: String, studentId: String) -> Unit
 ) {
     var studentName by remember(file.id) { mutableStateOf(file.studentName.ifBlank { file.displayStudentOrFile }) }
     var parentName by remember(file.id) { mutableStateOf(file.parentName) }
@@ -1133,7 +1112,7 @@ fun AssignParentDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Assign Parent WhatsApp",
+                            text = "Send to Parent",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -1143,6 +1122,11 @@ fun AssignParentDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Pick a parent to open WhatsApp with this file",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(onClick = onDismiss) {
@@ -1216,7 +1200,8 @@ fun AssignParentDialog(
                                     .any { normalizedFile.contains(it) }
                             Surface(
                                 onClick = {
-                                    onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
+                                    // Forward-style: choosing a parent sends immediately.
+                                    onSelect(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSuggested) MaterialTheme.colorScheme.primaryContainer
@@ -1256,12 +1241,21 @@ fun AssignParentDialog(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    Text(
-                                        text = "Select",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Send",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1340,7 +1334,8 @@ fun AssignParentDialog(
                             if (parentWhatsApp.filter { it.isDigit() }.length < 7) {
                                 validationError = "Enter a valid WhatsApp number with country code."
                             } else {
-                                onAssign(
+                                // Forward-style: sending happens straight after picking.
+                                onSelect(
                                     studentName.ifBlank { file.displayStudentOrFile },
                                     parentName.ifBlank { "Parent/Guardian" },
                                     parentWhatsApp.trim(),
@@ -1354,7 +1349,9 @@ fun AssignParentDialog(
                             contentColor = Color.White
                         )
                     ) {
-                        Text("Assign & Save", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Send on WhatsApp", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
