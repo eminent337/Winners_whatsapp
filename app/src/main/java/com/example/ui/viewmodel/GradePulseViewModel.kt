@@ -543,6 +543,10 @@ class GradePulseViewModel(
                 messageText.trim()
             }
 
+            // NOTE: opening WhatsApp pre-filled does not guarantee the message was
+            // sent — the teacher can still cancel inside WhatsApp. Record it as
+            // "opened" (not "sent") so the UI does not show a false blue-tick
+            // "sent" state. The file can be confirmed as sent from the Folder tab.
             repository.logChatMessage(
                 threadKey = threadKey,
                 studentId = studentId,
@@ -554,13 +558,11 @@ class GradePulseViewModel(
                 attachmentFileId = attachedFile?.id.orEmpty(),
                 attachmentFileName = attachedFile?.fileName.orEmpty(),
                 attachmentMimeType = attachedFile?.mimeType.orEmpty(),
-                deliveryStatus = "sent"
+                deliveryStatus = "opened"
             )
-            if (attachedFile != null) {
-                folderRepository.markDispatched(listOf(attachedFile.id))
-            }
         }
     }
+
 
     fun logIncomingParentReply(
         threadKey: String,

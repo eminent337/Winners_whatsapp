@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -681,10 +682,11 @@ fun ParentChatThreadScreen(
                                         )
                                         if (isOutgoing) {
                                             Spacer(modifier = Modifier.width(4.dp))
+                                            val isActuallySent = msg.deliveryStatus == "sent" || msg.deliveryStatus == "delivered"
                                             Icon(
-                                                imageVector = Icons.Default.DoneAll,
-                                                contentDescription = "Sent on WhatsApp",
-                                                tint = WhatsAppBlueTick,
+                                                imageVector = if (isActuallySent) Icons.Default.DoneAll else Icons.Default.Schedule,
+                                                contentDescription = if (isActuallySent) "Sent on WhatsApp" else "Opened in WhatsApp — not confirmed sent",
+                                                tint = if (isActuallySent) WhatsAppBlueTick else bubbleMetaColor,
                                                 modifier = Modifier.size(15.dp)
                                             )
                                         }

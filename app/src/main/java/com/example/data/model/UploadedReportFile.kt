@@ -89,17 +89,16 @@ fun buildUploadedFileWhatsAppCaption(
     principalSignature: String,
     customIntroNote: String = ""
 ): String {
-    val greeting = if (customIntroNote.isNotBlank()) {
-        customIntroNote.trim()
-    } else if (file.parentName.isNotBlank()) {
+    // If the teacher wrote their own note, send exactly that — no auto template.
+    if (customIntroNote.isNotBlank()) return customIntroNote.trim()
+
+    val greeting = if (file.parentName.isNotBlank()) {
         "Dear ${file.parentName},\nPlease find attached the official report card for ${file.displayStudentOrFile} from $schoolName ($academicTerm)."
     } else {
         "Dear Parent/Guardian,\nPlease find attached the official report card (${file.displayStudentOrFile}) from $schoolName ($academicTerm)."
     }
 
     return buildString {
-        append("*${schoolName.uppercase()}*\n")
-        append("Official Report Card • $academicTerm\n\n")
         append(greeting)
         append("\n\nSigned: $principalSignature")
     }

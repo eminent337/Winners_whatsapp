@@ -559,7 +559,7 @@ class GradePulseRepository internal constructor(
         val safePhone = parentWhatsApp.trim().ifBlank { "+2330000000" }.take(30)
         val safeThread = threadKey.trim().ifBlank { normalizeThreadKey(safePhone, studentId) }.take(60)
         val safeDirection = if (direction in listOf("outgoing", "incoming")) direction else "outgoing"
-        val safeStatus = if (deliveryStatus in listOf("sent", "delivered", "received")) deliveryStatus else "sent"
+        val safeStatus = if (deliveryStatus in listOf("sent", "delivered", "received", "opened")) deliveryStatus else "sent"
         val timeLabel = SimpleDateFormat("MMM d • h:mm a", Locale.US).format(Date()).take(60)
         val now = System.currentTimeMillis()
 

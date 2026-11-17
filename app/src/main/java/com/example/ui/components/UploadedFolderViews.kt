@@ -953,6 +953,43 @@ fun UploadedReportPreviewScreen(
                 }
             }
 
+            // Confirm that the file was actually sent in WhatsApp. Shown only once a
+            // parent WhatsApp is assigned, so the teacher can mark it sent after
+            // sending (opening WhatsApp alone does not confirm delivery).
+            if (file.hasAssignedRecipient && !file.isSent) {
+                Surface(
+                    onClick = { onMarkDispatched(listOf(file.id)) },
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .testTag("mark_file_as_sent_button")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (file.whatsappStatus == "opened") "Confirm sent to ${file.parentName}" else "Mark as sent",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
             // Bottom WhatsApp Pill Composer + Send FAB
             Row(
                 modifier = Modifier
@@ -995,7 +1032,10 @@ fun UploadedReportPreviewScreen(
 
                 Surface(
                     onClick = {
-                        val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                        // Opening WhatsApp pre-filled does not guarantee the file was
+                        // sent — the teacher can cancel inside WhatsApp. Do NOT mark
+                        // as sent here; they confirm with "Mark as sent" after sending.
+                        WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
                             context = context,
                             file = file,
                             schoolName = schoolName,
@@ -1003,9 +1043,6 @@ fun UploadedReportPreviewScreen(
                             principalSignature = principalSignature,
                             customIntroNote = customParentNote
                         )
-                        if (launched) {
-                            onMarkDispatched(listOf(file.id))
-                        }
                     },
                     shape = CircleShape,
                     color = WhatsAppGreenAccent,
