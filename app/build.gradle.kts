@@ -12,11 +12,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.gradepulse.kxmprq"
+    applicationId = "com.gradepulse.wfs"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.5"
+    versionCode = 6
+    versionName = "1.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
