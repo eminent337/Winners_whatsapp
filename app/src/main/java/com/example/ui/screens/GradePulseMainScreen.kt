@@ -189,53 +189,33 @@ fun GradePulseMainScreen(
                 previewFileId = null
             }
         )
-        studentToEdit?.let { editing ->
-        CreateStudentDialog(
-            editingStudent = editing,
-            onDismiss = { studentToEdit = null },
-            onConfirm = { fullName, code, gradeClass, parentName, parentWhatsApp, attended, total ->
-                viewModel.updateStudent(
-                    student = editing,
-                    fullName = fullName,
-                    studentCode = code,
-                    gradeClass = gradeClass,
-                    parentName = parentName,
-                    parentWhatsApp = parentWhatsApp,
-                    attendanceDays = attended,
-                    totalTermDays = total,
-                    onComplete = { studentToEdit = null }
-                )
-            }
-        )
-    }
-    }
-    return
-
-    fileForRecipientAssign?.let { target ->
-        AssignParentDialog(
-            file = target,
-            students = studentsList,
-            onDismiss = { fileForRecipientAssign = null },
-            onAssign = { stuName, parentName, parentWhatsApp, stuId ->
-                viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
-                fileForRecipientAssign = null
-                val normalizedPhone = com.example.data.model.normalizeParentPhone(parentWhatsApp)
-                val updatedFile = target.copy(
-                    matchedStudentId = stuId,
-                    studentName = stuName,
-                    parentName = parentName,
-                    parentWhatsApp = normalizedPhone
-                )
-                WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
-                    context = context,
-                    file = updatedFile,
-                    schoolName = schoolSettings.schoolName,
-                    academicTerm = schoolSettings.academicTerm,
-                    principalSignature = schoolSettings.principalSignature,
-                    customIntroNote = ""
-                )
-            }
-        )
+        fileForRecipientAssign?.let { target ->
+            AssignParentDialog(
+                file = target,
+                students = studentsList,
+                onDismiss = { fileForRecipientAssign = null },
+                onAssign = { stuName, parentName, parentWhatsApp, stuId ->
+                    viewModel.assignFileRecipient(target.id, stuName, parentName, parentWhatsApp, stuId)
+                    fileForRecipientAssign = null
+                    val normalizedPhone = com.example.data.model.normalizeParentPhone(parentWhatsApp)
+                    val updatedFile = target.copy(
+                        matchedStudentId = stuId,
+                        studentName = stuName,
+                        parentName = parentName,
+                        parentWhatsApp = normalizedPhone
+                    )
+                    WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                        context = context,
+                        file = updatedFile,
+                        schoolName = schoolSettings.schoolName,
+                        academicTerm = schoolSettings.academicTerm,
+                        principalSignature = schoolSettings.principalSignature,
+                        customIntroNote = ""
+                    )
+                }
+            )
+        }
+        return
     }
 
     // Confirm delete folder dialog
@@ -826,6 +806,26 @@ fun GradePulseMainScreen(
                     attendanceDays = attended,
                     totalTermDays = total,
                     onComplete = { showCreateStudentDialog = false }
+                )
+            }
+        )
+    }
+
+    studentToEdit?.let { editing ->
+        CreateStudentDialog(
+            editingStudent = editing,
+            onDismiss = { studentToEdit = null },
+            onConfirm = { fullName, code, gradeClass, parentName, parentWhatsApp, attended, total ->
+                viewModel.updateStudent(
+                    student = editing,
+                    fullName = fullName,
+                    studentCode = code,
+                    gradeClass = gradeClass,
+                    parentName = parentName,
+                    parentWhatsApp = parentWhatsApp,
+                    attendanceDays = attended,
+                    totalTermDays = total,
+                    onComplete = { studentToEdit = null }
                 )
             }
         )
