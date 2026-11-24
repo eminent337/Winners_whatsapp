@@ -101,7 +101,7 @@ class WhatsAppDispatchServiceTest {
         assertEquals("application/pdf", intent.type)
         assertEquals("com.whatsapp", intent.`package`)
         assertEquals("233209876543@s.whatsapp.net", intent.getStringExtra("jid"))
-        assertEquals("\u200B", intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertEquals("\u00A0", intent.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue((intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0)
         assertNotNull(intent.clipData)
         val streamUri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)

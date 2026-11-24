@@ -202,9 +202,9 @@ object WhatsAppIntentFactory {
         }
         val chatJid = WhatsAppSecurityValidator.buildWhatsAppJid(parentWhatsApp)
 
-        // WhatsApp drops the undocumented jid target for attachment intents with no text extra.
-        // Keep blank folder sends visually empty while preserving direct-chat targeting.
-        val shareText = caption.ifBlank { "\u200B" }
+        // WhatsApp drops the undocumented jid target when an attachment has no text extra.
+        // NBSP is visually blank but is retained as non-empty by WhatsApp's intent parser.
+        val shareText = caption.ifBlank { "\u00A0" }
         return Intent(Intent.ACTION_SEND).apply {
             type = resolvedMime
             putExtra(Intent.EXTRA_STREAM, contentUri)
