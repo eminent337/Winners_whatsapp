@@ -79,13 +79,13 @@ jobs:
           # Clean release assets so no stale/conflicting APKs remain
           gh release delete-asset latest app-debug.apk --yes 2>/dev/null || true
           if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "GradeSubmit v1.8 — Winners Family School" --notes "Fresh v1.8 build (commit ${{ github.sha }}). Selected-parent folder sends preserve the direct WhatsApp chat target. Download GradeSubmit.apk."
+            gh release edit latest --title "GradeSubmit v1.9 — Winners Family School" --notes "Fresh v1.9 build (commit ${{ github.sha }}). Folder file sends now include a minimal default text caption when none is entered so WhatsApp opens the parent's chat directly instead of the contact picker. Download GradeSubmit.apk."
             gh release upload latest site/GradeSubmit.apk --clobber
           else
             gh release create latest site/GradeSubmit.apk \
               --target "${{ github.sha }}" \
-              --title "GradeSubmit v1.8 — Winners Family School" \
-              --notes "Fresh v1.8 build (commit ${{ github.sha }}). Selected-parent folder sends preserve the direct WhatsApp chat target. Download GradeSubmit.apk."
+              --title "GradeSubmit v1.9 — Winners Family School" \
+              --notes "Fresh v1.9 build (commit ${{ github.sha }}). Folder file sends now include a minimal default text caption when none is entered so WhatsApp opens the parent's chat directly instead of the contact picker. Download GradeSubmit.apk."
           fi
 
   deploy_pages:

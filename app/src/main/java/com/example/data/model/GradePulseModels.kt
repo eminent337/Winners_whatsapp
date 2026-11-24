@@ -104,9 +104,12 @@ fun normalizeParentPhone(rawPhone: String): String {
     if (digits.startsWith("00") && digits.length > 11) {
         digits = digits.removePrefix("00")
     }
+    if (digits.length == 13 && digits.startsWith("2330")) {
+        digits = "233" + digits.substring(4)
+    }
     if (digits.length == 10 && digits.startsWith("0")) {
         val prefix3 = digits.take(3)
-        if (prefix3 in setOf("020", "023", "024", "025", "050", "053", "054", "055", "056", "057", "059")) {
+        if (prefix3 in setOf("020", "023", "024", "025", "026", "027", "028", "050", "053", "054", "055", "056", "057", "058", "059")) {
             digits = "233" + digits.substring(1)
         }
     }

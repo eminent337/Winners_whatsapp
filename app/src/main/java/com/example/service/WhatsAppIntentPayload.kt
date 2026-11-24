@@ -53,10 +53,14 @@ object WhatsAppSecurityValidator {
         if (digits.startsWith("00") && digits.length > MIN_E164_DIGITS + 2) {
             digits = digits.removePrefix("00")
         }
-        // Normalize Ghanaian local numbers (e.g. 024..., 053..., 055...) to international 233... format
+        // Handle common "+233 024..." typo (leading 0 kept after country code 233)
+        if (digits.length == 13 && digits.startsWith("2330")) {
+            digits = "233" + digits.substring(4)
+        }
+        // Normalize Ghanaian local numbers (e.g. 024..., 026..., 053..., 055...) to international 233... format
         if (digits.length == 10 && digits.startsWith("0")) {
             val prefix3 = digits.take(3)
-            if (prefix3 in setOf("020", "023", "024", "025", "050", "053", "054", "055", "056", "057", "059")) {
+            if (prefix3 in setOf("020", "023", "024", "025", "026", "027", "028", "050", "053", "054", "055", "056", "057", "058", "059")) {
                 digits = "233" + digits.substring(1)
             }
         }
@@ -142,6 +146,14 @@ object WhatsAppSecurityValidator {
  */
 object WhatsAppIntentFactory {
 
+    /**
+     * WhatsApp ignores the undocumented `jid` extra on `ACTION_SEND` file intents
+     * (opening the "Send to..." contact picker instead of the parent's chat) whenever
+     * `EXTRA_TEXT` is empty or whitespace-only. Supplying real non-whitespace text
+     * makes folder sends match the working chat-with-attachment flow.
+     */
+    const val DEFAULT_DIRECT_FILE_CAPTION = "Please find attached."
+
     fun buildDirectChatTextIntent(
         context: Context,
         parentWhatsApp: String,
@@ -202,13 +214,24 @@ object WhatsAppIntentFactory {
         }
         val chatJid = WhatsAppSecurityValidator.buildWhatsAppJid(parentWhatsApp)
 
-        // WhatsApp drops the undocumented jid target when an attachment has no text extra.
-        // NBSP is visually blank but is retained as non-empty by WhatsApp's intent parser.
-        val shareText = caption.ifBlank { "\u00A0" }
+        val shareText = caption.trim().ifBlank {
+            if (chatJid != null) DEFAULT_DIRECT_FILE_CAPTION else ""
+        }
+        if (!targetPackage.isNullOrBlank()) {
+            runCatching {
+                context.grantUriPermission(
+                    targetPackage,
+                    contentUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+        }
         return Intent(Intent.ACTION_SEND).apply {
             type = resolvedMime
             putExtra(Intent.EXTRA_STREAM, contentUri)
-            putExtra(Intent.EXTRA_TEXT, shareText)
+            if (shareText.isNotEmpty()) {
+                putExtra(Intent.EXTRA_TEXT, shareText)
+            }
             // Attach ClipData so Android scoped URI read permission grants reliably cover EXTRA_STREAM.
             clipData = ClipData.newUri(context.contentResolver, authorizedFile.name, contentUri)
             if (chatJid != null) {
@@ -246,11 +269,27 @@ object WhatsAppIntentFactory {
         if (uris.isEmpty()) return null
 
         val chatJid = WhatsAppSecurityValidator.buildWhatsAppJid(parentWhatsApp)
+        val shareText = caption.trim().ifBlank {
+            if (chatJid != null) DEFAULT_DIRECT_FILE_CAPTION else ""
+        }
+        if (!targetPackage.isNullOrBlank()) {
+            for (uri in uris) {
+                runCatching {
+                    context.grantUriPermission(
+                        targetPackage,
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+            }
+        }
 
         return Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = mimeType.ifBlank { "*/*" }
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            putExtra(Intent.EXTRA_TEXT, caption)
+            if (shareText.isNotEmpty()) {
+                putExtra(Intent.EXTRA_TEXT, shareText)
+            }
             if (clipData != null) {
                 this.clipData = clipData
             }

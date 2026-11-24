@@ -1222,7 +1222,14 @@ fun AssignParentDialog(
                                     .any { normalizedFile.contains(it) }
                             Surface(
                                 onClick = {
-                                    onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
+                                    if (stu.parentWhatsApp.filter { it.isDigit() }.length < 7) {
+                                        studentName = stu.fullName
+                                        parentName = stu.parentName
+                                        parentWhatsApp = "+233"
+                                        validationError = "No WhatsApp number saved for ${stu.fullName}. Enter one below."
+                                    } else {
+                                        onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
+                                    }
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSuggested) MaterialTheme.colorScheme.primaryContainer

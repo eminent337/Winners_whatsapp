@@ -210,7 +210,7 @@ fun GradePulseMainScreen(
                         schoolName = schoolSettings.schoolName,
                         academicTerm = schoolSettings.academicTerm,
                         principalSignature = schoolSettings.principalSignature,
-                        customIntroNote = ""
+                        customIntroNote = schoolSettings.customWhatsAppGreeting
                     )
                 }
             )
@@ -356,18 +356,23 @@ fun GradePulseMainScreen(
                                     val chosen = uploadedFiles.filter { it.id in validSelectedIds }
                                     if (chosen.size == 1) {
                                         val single = chosen.first()
-                                        val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
-                                            context = context,
-                                            file = single,
-                                            schoolName = schoolSettings.schoolName,
-                                            academicTerm = schoolSettings.academicTerm,
-                                            principalSignature = schoolSettings.principalSignature,
-                                            customIntroNote = schoolSettings.customWhatsAppGreeting
-                                        )
-                                        if (launched) {
-                                            viewModel.markUploadedFilesDispatched(listOf(single.id))
+                                        if (!single.hasAssignedRecipient) {
+                                            fileForRecipientAssign = single
+                                            selectedFileIds = emptySet()
+                                        } else {
+                                            val launched = WhatsAppDispatcher.launchWhatsAppWithUploadedFile(
+                                                context = context,
+                                                file = single,
+                                                schoolName = schoolSettings.schoolName,
+                                                academicTerm = schoolSettings.academicTerm,
+                                                principalSignature = schoolSettings.principalSignature,
+                                                customIntroNote = schoolSettings.customWhatsAppGreeting
+                                            )
+                                            if (launched) {
+                                                viewModel.markUploadedFilesDispatched(listOf(single.id))
+                                            }
+                                            selectedFileIds = emptySet()
                                         }
-                                        selectedFileIds = emptySet()
                                     } else if (chosen.size > 1) {
                                         showBatchSelectedSendDialog = true
                                     }
@@ -852,7 +857,7 @@ fun GradePulseMainScreen(
                     schoolName = schoolSettings.schoolName,
                     academicTerm = schoolSettings.academicTerm,
                     principalSignature = schoolSettings.principalSignature,
-                    customIntroNote = ""
+                    customIntroNote = schoolSettings.customWhatsAppGreeting
                 )
             }
         )
