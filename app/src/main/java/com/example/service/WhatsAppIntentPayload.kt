@@ -202,10 +202,13 @@ object WhatsAppIntentFactory {
         }
         val chatJid = WhatsAppSecurityValidator.buildWhatsAppJid(parentWhatsApp)
 
+        // WhatsApp drops the undocumented jid target for attachment intents with no text extra.
+        // Keep blank folder sends visually empty while preserving direct-chat targeting.
+        val shareText = caption.ifBlank { "\u200B" }
         return Intent(Intent.ACTION_SEND).apply {
             type = resolvedMime
             putExtra(Intent.EXTRA_STREAM, contentUri)
-            putExtra(Intent.EXTRA_TEXT, caption)
+            putExtra(Intent.EXTRA_TEXT, shareText)
             // Attach ClipData so Android scoped URI read permission grants reliably cover EXTRA_STREAM.
             clipData = ClipData.newUri(context.contentResolver, authorizedFile.name, contentUri)
             if (chatJid != null) {

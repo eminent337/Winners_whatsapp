@@ -101,12 +101,31 @@ class WhatsAppDispatchServiceTest {
         assertEquals("application/pdf", intent.type)
         assertEquals("com.whatsapp", intent.`package`)
         assertEquals("233209876543@s.whatsapp.net", intent.getStringExtra("jid"))
-        assertTrue(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().contains("Ama Owusu"))
+        assertEquals("\u200B", intent.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue((intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0)
         assertNotNull(intent.clipData)
         val streamUri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         assertEquals("content", streamUri?.scheme)
         assertEquals("${app.packageName}.fileprovider", streamUri?.authority)
+    }
+
+    @Test
+    fun `buildReportFileShareIntent preserves a real caption while targeting parent jid`() {
+        val authorizedDir = File(app.filesDir, "uploaded_report_cards/user_2").apply { mkdirs() }
+        val reportPdf = File(authorizedDir, "yaw_mensah_report.pdf").apply { writeText("%PDF-1.4 content") }
+
+        val intent = WhatsAppIntentFactory.buildReportFileShareIntent(
+            context = app,
+            filePath = reportPdf.absolutePath,
+            mimeType = "application/pdf",
+            caption = "Please review this report.",
+            parentWhatsApp = "0241234567",
+            targetPackage = "com.whatsapp"
+        )
+
+        requireNotNull(intent)
+        assertEquals("Please review this report.", intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertEquals("233241234567@s.whatsapp.net", intent.getStringExtra("jid"))
     }
 
     @Test

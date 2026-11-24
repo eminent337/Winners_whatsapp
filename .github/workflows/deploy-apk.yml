@@ -79,13 +79,13 @@ jobs:
           # Clean release assets so no stale/conflicting APKs remain
           gh release delete-asset latest app-debug.apk --yes 2>/dev/null || true
           if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "GradeSubmit v1.6 — Winners Family School" --notes "Fresh v1.6 build (commit ${{ github.sha }}). New applicationId (com.gradepulse.wfs) installs cleanly alongside any old copy. Download GradeSubmit.apk."
+            gh release edit latest --title "GradeSubmit v1.7 — Winners Family School" --notes "Fresh v1.7 build (commit ${{ github.sha }}). Folder file sends now preserve the attached parent's direct WhatsApp chat. Download GradeSubmit.apk."
             gh release upload latest site/GradeSubmit.apk --clobber
           else
             gh release create latest site/GradeSubmit.apk \
               --target "${{ github.sha }}" \
-              --title "GradeSubmit v1.6 — Winners Family School" \
-              --notes "Fresh v1.6 build (commit ${{ github.sha }}). New applicationId (com.gradepulse.wfs) installs cleanly alongside any old copy. Download GradeSubmit.apk."
+              --title "GradeSubmit v1.7 — Winners Family School" \
+              --notes "Fresh v1.7 build (commit ${{ github.sha }}). Folder file sends now preserve the attached parent's direct WhatsApp chat. Download GradeSubmit.apk."
           fi
 
   deploy_pages:
