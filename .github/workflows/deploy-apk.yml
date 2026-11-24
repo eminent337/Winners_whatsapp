@@ -79,13 +79,13 @@ jobs:
           # Clean release assets so no stale/conflicting APKs remain
           gh release delete-asset latest app-debug.apk --yes 2>/dev/null || true
           if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "GradeSubmit v1.9 — Winners Family School" --notes "Fresh v1.9 build (commit ${{ github.sha }}). Folder file sends now include a minimal default text caption when none is entered so WhatsApp opens the parent's chat directly instead of the contact picker. Download GradeSubmit.apk."
+            gh release edit latest --title "GradeSubmit v1.10 — Winners Family School" --notes "Fresh v1.10 build (commit ${{ github.sha }}). Restored AFOAKWA KINGSLEY OHENE AKESE's parent number (+233277085003) from BECE 2027 bio data (with automatic upgrade backfill), improved Assign Parent picker to search all students, highlight missing numbers, auto-scroll to phone entry, and save newly entered numbers to the student profile. Download GradeSubmit.apk."
             gh release upload latest site/GradeSubmit.apk --clobber
           else
             gh release create latest site/GradeSubmit.apk \
               --target "${{ github.sha }}" \
-              --title "GradeSubmit v1.9 — Winners Family School" \
-              --notes "Fresh v1.9 build (commit ${{ github.sha }}). Folder file sends now include a minimal default text caption when none is entered so WhatsApp opens the parent's chat directly instead of the contact picker. Download GradeSubmit.apk."
+              --title "GradeSubmit v1.10 — Winners Family School" \
+              --notes "Fresh v1.10 build (commit ${{ github.sha }}). Restored AFOAKWA KINGSLEY OHENE AKESE's parent number (+233277085003) from BECE 2027 bio data (with automatic upgrade backfill), improved Assign Parent picker to search all students, highlight missing numbers, auto-scroll to phone entry, and save newly entered numbers to the student profile. Download GradeSubmit.apk."
           fi
 
   deploy_pages:

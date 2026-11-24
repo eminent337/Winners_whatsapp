@@ -81,8 +81,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1091,9 +1093,11 @@ fun AssignParentDialog(
     var studentName by remember(file.id) { mutableStateOf(file.studentName.ifBlank { file.displayStudentOrFile }) }
     var parentName by remember(file.id) { mutableStateOf(file.parentName) }
     var parentWhatsApp by remember(file.id) { mutableStateOf(file.parentWhatsApp.ifBlank { "+233" }) }
-    var validationError by remember { mutableStateOf<String?>(null) }
+    var selectedStudentId by remember(file.id) { mutableStateOf(file.matchedStudentId) }
+    var validationError by remember(file.id) { mutableStateOf<String?>(null) }
     var searchQuery by remember(file.id) { mutableStateOf("") }
-    var selectedTab by remember(file.id) { mutableStateOf("suggested") }
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Auto-match: compare the file name against student names (tokens length >= 3)
     val normalizedFile = remember(file.id) {
@@ -1107,6 +1111,9 @@ fun AssignParentDialog(
             val tokens = stu.fullName.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length >= 3 }
             tokens.isNotEmpty() && tokens.any { normalizedFile.contains(it) }
         }
+    }
+    var selectedTab by remember(file.id) {
+        mutableStateOf(if (suggestedStudents.isNotEmpty()) "suggested" else "all")
     }
 
     Dialog(
@@ -1123,7 +1130,7 @@ fun AssignParentDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -1200,13 +1207,27 @@ fun AssignParentDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    val baseList = if (selectedTab == "suggested") suggestedStudents else students
+                    val baseList = if (searchQuery.isNotBlank() || selectedTab == "all") students else suggestedStudents
                     val filteredStudents = remember(searchQuery, baseList) {
                         if (searchQuery.isBlank()) baseList
                         else baseList.filter {
                             it.fullName.contains(searchQuery, ignoreCase = true) ||
                                 it.parentName.contains(searchQuery, ignoreCase = true) ||
                                 it.parentWhatsApp.contains(searchQuery, ignoreCase = true)
+                        }
+                    }
+                    if (validationError != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = validationError ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
                         }
                     }
                     LazyColumn(
@@ -1216,24 +1237,34 @@ fun AssignParentDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(filteredStudents, key = { it.id }) { stu ->
-                            val isSuggested = selectedTab == "suggested" &&
+                            val hasPhone = stu.parentWhatsApp.filter { it.isDigit() }.length >= 7
+                            val isSuggested = selectedTab == "suggested" && searchQuery.isBlank() &&
                                 stu.fullName.lowercase().split(Regex("[^a-z0-9]+"))
                                     .filter { it.length >= 3 }
                                     .any { normalizedFile.contains(it) }
+                            val isPickedWithoutPhone = selectedStudentId == stu.id && !hasPhone
                             Surface(
                                 onClick = {
-                                    if (stu.parentWhatsApp.filter { it.isDigit() }.length < 7) {
+                                    if (!hasPhone) {
+                                        selectedStudentId = stu.id
                                         studentName = stu.fullName
                                         parentName = stu.parentName
                                         parentWhatsApp = "+233"
-                                        validationError = "No WhatsApp number saved for ${stu.fullName}. Enter one below."
+                                        validationError = "No WhatsApp number saved for ${stu.fullName}. Enter the parent's number below to save & send."
+                                        coroutineScope.launch {
+                                            scrollState.animateScrollTo(scrollState.maxValue)
+                                        }
                                     } else {
+                                        validationError = null
                                         onAssign(stu.fullName, stu.parentName, stu.parentWhatsApp, stu.id)
                                     }
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (isSuggested) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
+                                color = when {
+                                    isPickedWithoutPhone -> MaterialTheme.colorScheme.errorContainer
+                                    isSuggested -> MaterialTheme.colorScheme.primaryContainer
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1262,17 +1293,30 @@ fun AssignParentDialog(
                                             )
                                         }
                                         Text(
-                                            text = "${stu.parentName} • ${stu.parentWhatsApp}",
+                                            text = if (hasPhone) {
+                                                "${stu.parentName} • ${stu.parentWhatsApp}"
+                                            } else {
+                                                "${stu.parentName} • No WhatsApp number saved"
+                                            },
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = if (hasPhone) {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            } else {
+                                                MaterialTheme.colorScheme.error
+                                            },
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Send",
+                                        text = if (hasPhone) "Send" else "Add #",
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = if (hasPhone) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.error
+                                        },
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -1310,7 +1354,10 @@ fun AssignParentDialog(
 
                 OutlinedTextField(
                     value = studentName,
-                    onValueChange = { studentName = it },
+                    onValueChange = {
+                        studentName = it
+                        selectedStudentId = ""
+                    },
                     label = { Text("Student Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -1324,7 +1371,10 @@ fun AssignParentDialog(
                 )
                 OutlinedTextField(
                     value = parentWhatsApp,
-                    onValueChange = { parentWhatsApp = it },
+                    onValueChange = {
+                        parentWhatsApp = it
+                        validationError = null
+                    },
                     label = { Text("Parent WhatsApp Number *") },
                     placeholder = { Text("+233241234567") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -1357,7 +1407,7 @@ fun AssignParentDialog(
                                     studentName.ifBlank { file.displayStudentOrFile },
                                     parentName.ifBlank { "Parent of " + (studentName.ifBlank { file.displayStudentOrFile }) },
                                     parentWhatsApp.trim(),
-                                    ""
+                                    selectedStudentId
                                 )
                             }
                         },

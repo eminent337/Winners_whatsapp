@@ -351,7 +351,7 @@ class GradePulseRepository internal constructor(
             Triple("WFS-BECE27-002", "ACKON CHRISTIANA NANA AMA NHYIRA OWUSUWAA", "+233531867572"),
             Triple("WFS-BECE27-003", "ADDEY JOSEPHINE AKUA BABYIE", "+233538604588"),
             Triple("WFS-BECE27-004", "ADU-BOAHEN DANIEL KWAKU", "+233555288127"),
-            Triple("WFS-BECE27-005", "AFOAKWA KINGSLEY OHENE AKESE", ""),
+            Triple("WFS-BECE27-005", "AFOAKWA KINGSLEY OHENE AKESE", "+233277085003"),
             Triple("WFS-BECE27-006", "ADJEI RANSFORD APPIAH", "+233531561451"),
             Triple("WFS-BECE27-007", "AIDOO KINGSLEY NANA KWEKU", "+233248013336"),
             Triple("WFS-BECE27-008", "AKUTUSI PRINCESS BRYANA IMORO", "+233244898939"),
@@ -498,7 +498,35 @@ class GradePulseRepository internal constructor(
     suspend fun migratePlaceholderRosterIfNeeded(): Result<Unit> = runCatching {
         val current = studentsFlow.value
         val hasPlaceholder = current.any { it.studentCode.startsWith("GP-2026-10") }
-        if (!hasPlaceholder) return@runCatching
+        if (!hasPlaceholder) {
+            // Backfill verified bio-data numbers that were dropped by earlier 027-prefix filtering
+            // and clean any legacy "Parent/Guardian" labels on existing installs.
+            val backfilledPhones = mapOf(
+                "WFS-BECE27-005" to "+233277085003" // AFOAKWA KINGSLEY OHENE AKESE (0277085003)
+            )
+            var changed = false
+            val updated = current.map { stu ->
+                var next = stu
+                val missingPhone = backfilledPhones[stu.studentCode]
+                if (missingPhone != null && next.parentWhatsApp.isBlank()) {
+                    next = next.copy(parentWhatsApp = missingPhone)
+                    changed = true
+                }
+                if (next.parentName.startsWith("Parent/Guardian of ")) {
+                    next = next.copy(parentName = next.parentName.replace("Parent/Guardian of ", "Parent of "))
+                    changed = true
+                } else if (next.parentName == "Parent/Guardian") {
+                    next = next.copy(parentName = "Parent of ${next.fullName.takeWhile { it != ' ' }}")
+                    changed = true
+                }
+                next
+            }
+            if (changed) {
+                studentsFlow.value = updated
+                persistStudents()
+            }
+            return@runCatching
+        }
 
         val realCodes = listOf(
             "WFS-BECE27-001", "WFS-BECE27-002", "WFS-BECE27-003", "WFS-BECE27-004",

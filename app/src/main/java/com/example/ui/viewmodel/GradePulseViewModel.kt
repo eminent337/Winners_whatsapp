@@ -471,6 +471,18 @@ class GradePulseViewModel(
                 parentWhatsApp = normalizedPhone,
                 studentId = studentId
             )
+            // If this student previously had no WhatsApp number saved, save it to their profile too
+            if (studentId.isNotBlank() && normalizedPhone.filter { it.isDigit() }.length >= 7) {
+                val existing = (studentsState.value as? UiState.Success)?.data?.find { it.id == studentId }
+                if (existing != null && existing.parentWhatsApp.filter { it.isDigit() }.length < 7) {
+                    repository.updateStudent(
+                        existing.copy(
+                            parentWhatsApp = normalizedPhone,
+                            parentName = parentName.ifBlank { existing.parentName }
+                        )
+                    )
+                }
+            }
             showBannerMessage("Assigned to $studentName ($normalizedPhone)")
         }
     }
